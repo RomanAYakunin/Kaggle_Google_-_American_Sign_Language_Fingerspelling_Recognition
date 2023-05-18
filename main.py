@@ -1,16 +1,24 @@
-# This is a sample Python script.
+import polars as pl
+import numpy as np
+from utils import get_meta, get_seq_ids, get_paths, get_phrases
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+# seq_ids = get_seq_ids()
+seq_ids = np.array([1817370426, 1535530550, 1817123330, 1536952192, 1536750016, 1818394131, 1817882602, 1683353194])
 
+phrases = get_phrases(seq_ids)
+print(len(phrases))
+print(phrases)
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+paths = get_paths(seq_ids)
+print(len(paths))
+print(paths)
 
-
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+# train_seq_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').collect().to_numpy().flatten()
+# sup_seq_ids = pl.scan_csv('raw_data/supplemental_metadata.csv').select('sequence_id').collect().to_numpy().flatten()
+# print(len(train_seq_ids))
+# print(train_seq_ids[:5])
+# print(len(sup_seq_ids))
+# print(sup_seq_ids[:5])
+# print("-------")
+# print(np.intersect1d([3, 1, 2, 5, 6], [6, 10, 237, 2, 5, 173]))
+# print(np.intersect1d(train_seq_ids, sup_seq_ids))

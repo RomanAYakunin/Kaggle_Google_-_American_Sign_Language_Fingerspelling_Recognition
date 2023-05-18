@@ -4,6 +4,30 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+kaggle = "*"
+numpy = "*"
+seaborn = "*"
+pandas = "*"
+scipy = "*"
+sklearn = "*"
+colorama = "*"
+tables = "*"
+matplotlib = "==3.5.3"
+tqdm = "*"
+xgboost = "*"
+lightgbm = "*"
+logger = "*"
+polars = "*"
+plotly = "*"
+pyarrow = "*"
+fastparquet = "*"
+jupyter = "*"
+scikit-spatial = "*"
+torchinfo = "*"
+onnx-tf = "*"
+tensorflow = "==2.8.0"
+tensorflow-probability = "==0.16.0"
+tensorflow-addons = "==0.16.1"
 
 [dev-packages]
 
