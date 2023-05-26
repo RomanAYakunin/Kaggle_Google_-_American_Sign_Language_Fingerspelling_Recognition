@@ -4,7 +4,6 @@ import onnx
 from onnx_tf.backend import prepare
 import tensorflow as tf
 from model import Model
-from copy import deepcopy
 from dataset import FeatureGenerator, get_column_names
 
 FG = FeatureGenerator()
@@ -24,24 +23,23 @@ tflite_infer_model_path = 'submissions/model.tflite'
 model = Model()
 model.load_state_dict(torch.load(torch_model_path))
 model.eval()
-# torchmodel = deepcopy(model)
 model_inputs = torch.ones((1, 40, FG.num_points, FG.num_axes))
 
-# torch.onnx.export(
-#     model,                    # PyTorch Model
-#     model_inputs,             # Input tensor
-#     onnx_model_path,          # Output file (eg. 'output_model.onnx')
-#     opset_version=12,         # Operator support version
-#     input_names=['x'],        # Input tensor name (arbitrary)
-#     output_names=['output'],  # Output tensor name (arbitrary)
-#     dynamic_axes={
-#         'x': {1: 'seq_len'},
-#     }
-# )
-#
-# onnx_model = onnx.load(onnx_model_path)
-# tf_rep = prepare(onnx_model)
-# tf_rep.export_graph(tf_model_dir)
+torch.onnx.export(
+    model,                    # PyTorch Model
+    model_inputs,             # Input tensor
+    onnx_model_path,          # Output file (eg. 'output_model.onnx')
+    opset_version=12,         # Operator support version
+    input_names=['x'],        # Input tensor name (arbitrary)
+    output_names=['output'],  # Output tensor name (arbitrary)
+    dynamic_axes={
+        'x': {1: 'seq_len'},
+    }
+)
+
+onnx_model = onnx.load(onnx_model_path)
+tf_rep = prepare(onnx_model)
+tf_rep.export_graph(tf_model_dir)
 
 
 class InferenceModel(tf.Module):
