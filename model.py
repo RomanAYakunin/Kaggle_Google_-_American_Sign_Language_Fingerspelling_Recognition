@@ -28,12 +28,7 @@ class SlidingATTN(nn.Module):
         self.window_size = window_size
         self.dilation = dilation
 
-        self.attn_net = nn.Sequential(
-            nn.Linear(dim, num_heads),
-            nn.LayerNorm(num_heads),
-            nn.ELU(),
-            nn.Linear(num_heads, num_heads)
-        )
+        self.attn_lin = nn.Linear(dim, num_heads)
         self.pos_component = nn.Parameter(torch.Tensor(torch.zeros(1, 1, window_size, num_heads)))
         nn.init.xavier_uniform_(self.pos_component)
         self.v_lin = nn.Sequential(
@@ -49,11 +44,11 @@ class SlidingATTN(nn.Module):
         )
 
         indices_buffer = dilation * torch.arange(window_size).unsqueeze(0) + \
-                         torch.arange(FeatureGenerator().max_frames).unsqueeze(1)
+                         torch.arange(FeatureGenerator().max_len).unsqueeze(1)
         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
 
     def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]  # TODO remove t
-        attn = torch.exp(self.attn_net(x)) * (~mask).to(torch.float32).unsqueeze(2)  # [N, L, num_heads]
+        attn = torch.exp(self.attn_lin(x)) * (~mask).to(torch.float32).unsqueeze(2)  # [N, L, num_heads]
         attn = self._extract_sliding_windows(attn) * torch.exp(self.pos_component)
         attn = attn / (torch.sum(attn, dim=2, keepdim=True) + 1e-8)
 
@@ -106,12 +101,12 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         self.nan_value = FG.nan_value
         self.norm_ranges = FG.norm_ranges
 
-        self.x_norm = AxisLayerNorm(self.num_axes, self.num_points, (1, 2), self.nan_value)
-        self.feature_norms = nn.ModuleList([AxisLayerNorm(self.num_axes, end - start, 2, self.nan_value)
+        self.x_norm = AxisLayerNorm(self.num_points, self.num_axes, (1, 2), self.nan_value)
+        self.feature_norms = nn.ModuleList([AxisLayerNorm(end - start, self.num_axes, 2, self.nan_value)
                                             for start, end in self.norm_ranges])
 
-        self.dim = 416
-        self.num_heads = 32
+        self.dim = 768
+        self.num_heads = 128
 
         self.input_net = nn.Sequential(
             nn.Linear(2 * self.num_points * self.num_axes, 2 * self.dim),  # TODO try turning off bias
@@ -125,11 +120,12 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         )
         self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.max_len)
         self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1)
-        self.sliding_attn2 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=3, dilation=5)
+        self.sliding_attn2 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
+        self.sliding_attn3 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
         self.output_lin = nn.Linear(self.dim, 60)
 
     def forward(self, x):  # [N, L, num_points, num_axes]
-        mask = torch.all(x == self.nan_value, dim=2)  # [N, L]
+        mask = torch.all(torch.all(x == self.nan_value, dim=2), dim=2)  # [N, L]
         normed_x = self.x_norm(x)
         normed_features = torch.cat([self.feature_norms[i](x[:, :, start: end])  # TODO make use of symmetry?
                                      for i, (start, end) in enumerate(self.norm_ranges)], dim=2)
@@ -139,5 +135,6 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         input_net_out = self.pos_enc(self.input_net(x))
         sliding_attn1_out = self.sliding_attn1(input_net_out, mask) + input_net_out
         sliding_attn2_out = self.sliding_attn2(sliding_attn1_out, mask) + sliding_attn1_out
-        out = self.output_lin(sliding_attn2_out)
+        sliding_attn3_out = self.sliding_attn3(sliding_attn2_out, mask) + sliding_attn2_out
+        out = self.output_lin(sliding_attn3_out)
         return out

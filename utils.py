@@ -4,10 +4,12 @@ import time
 import json
 import polars as pl
 import numpy as np
+import torch
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from sklearn.utils import shuffle
 from sklearn.model_selection import GroupShuffleSplit
+import editdistance
 
 POINTS_PER_FRAME = 543
 
@@ -39,7 +41,8 @@ def get_meta():
 
 
 def get_seq_ids():
-    return get_meta().select('sequence_id').collect().to_numpy().flatten()
+    seq_ids = get_meta().select('sequence_id').collect().to_numpy().flatten()
+    return seq_ids[seq_ids != 435344989]
 
 
 def get_random_seq_ids():  # for eda/debugging
@@ -88,15 +91,30 @@ def phrases_to_labels(phrases):
         label = np.empty(len(phrase))
         for i, char in enumerate(phrase):
             label[i] = idx_dict[char]
-        labels.append(label)
+        labels.append(label + 1)
     return labels
 
 
-def slow_get_seqs(seq_ids):
-    paths = get_paths(seq_ids)
-    seqs = []
-    for seq_id, path in tqdm(list(zip(seq_ids, paths)), file=sys.stdout):
-        seq = pl.scan_parquet(path).filter(pl.col('sequence_id') == seq_id).collect().to_numpy()[:, 1:-1]\
-            .reshape((-1, 3, POINTS_PER_FRAME)).transpose(0, 2, 1)
-        seqs.append(seq)
-    return seqs
+def label_to_phrase(label):
+    with open('raw_data/character_to_prediction_index.json') as file:
+        idx_dict = json.load(file)
+    char_list = [' ' for _ in range(59)]
+    for char, idx in idx_dict.items():
+        char_list[idx] = char
+    phrase = ''
+    for idx in label:
+        phrase += char_list[idx - 1]
+    return phrase
+
+
+def proc_model_output(output):  # works with torch tensors
+    output = torch.unique_consecutive(output)
+    return output[output != 0]
+
+
+def accuracy_score(outputs, labels):  # works with torch tensors TODO see if there is more efficient edit dist impl
+    len_sum, dist_sum = 0, 0
+    for output, label in zip(outputs, labels):
+        len_sum += len(label)
+        dist_sum += editdistance.eval(proc_model_output(output), label)
+    return (len_sum - dist_sum) / len_sum
