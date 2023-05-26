@@ -1,13 +1,33 @@
+import os
 import sys
 from tqdm import tqdm
 import polars as pl
 import numpy as np
-from utils import get_seq_ids, get_random_seq_ids, get_paths, get_phrases
+from utils import get_seq_ids, get_random_seq_ids, get_paths, get_phrases, get_part_ids
 from sklearn.utils import shuffle
 import matplotlib.pyplot as plt
 
 
-def get_num_seq():
+def check_sorted():
+    train_paths = [f'raw_data/train_landmarks/{file}' for file in os.listdir('raw_data/train_landmarks')]
+    sup_paths = [f'raw_data/supplemental_landmarks/{file}' for file in os.listdir('raw_data/supplemental_landmarks')]
+    for path in tqdm(train_paths, file=sys.stdout):
+        seq_ids = pl.scan_parquet(path).select('sequence_id').collect().to_numpy().flatten()
+        if (seq_ids != np.sort(seq_ids)).any():
+            print('SEQ IDS NOT SORTED')
+            return
+    for path in tqdm(sup_paths, file=sys.stdout):
+        seq_ids = pl.scan_parquet(path).select('sequence_id').collect().to_numpy().flatten()
+        if (seq_ids != np.sort(seq_ids)).any():
+            print('SEQ IDS NOT SORTED')
+            return
+    print('SEQ IDS ARE SORTED')
+
+    print('----------------------------------------------------------'
+          '-----------------------------------------------------------')
+
+
+def show_num_seq():
     num_train_seqs = len(pl.scan_csv('raw_data/train.csv').select('sequence_id').collect())
     num_sup_seqs = len(pl.scan_csv('raw_data/supplemental_metadata.csv').select('sequence_id').collect())
     print('num train seqs:', num_train_seqs)
@@ -18,13 +38,22 @@ def get_num_seq():
           '-----------------------------------------------------------')
 
 
-def get_random_seq_stats():
+def show_part_ids():
+    part_ids = np.unique(get_part_ids(get_seq_ids()))
+    print('# of unique part ids:', len(part_ids))
+    print('unique part ids:', part_ids)
+
+    print('----------------------------------------------------------'
+          '-----------------------------------------------------------')
+
+
+def show_random_seq_stats():
     print('stats for 2000 random sequences:')
     seq_ids = get_random_seq_ids()
     paths = get_paths(seq_ids)
     seq_lens = []
     for seq_id, path in tqdm(list(zip(seq_ids, paths)), file=sys.stdout):
-        seq_len = len(pl.scan_parquet(f'raw_data/{path}').select('sequence_id').filter(pl.col('sequence_id') == seq_id)\
+        seq_len = len(pl.scan_parquet(path).select('sequence_id').filter(pl.col('sequence_id') == seq_id)\
             .collect())
         seq_lens.append(seq_len)
     seq_lens = np.array(seq_lens)
@@ -67,4 +96,4 @@ def get_random_seq_stats():
           '-----------------------------------------------------------')
 
 
-get_random_seq_stats()
+show_part_ids()

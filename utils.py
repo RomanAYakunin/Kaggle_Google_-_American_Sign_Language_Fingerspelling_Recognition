@@ -1,11 +1,15 @@
 import os
 import sys
 import time
+import json
 import polars as pl
 import numpy as np
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from sklearn.utils import shuffle
+from sklearn.model_selection import GroupShuffleSplit
+
+POINTS_PER_FRAME = 543
 
 
 def save_arrs(arrs, path, verbose=True):
@@ -42,29 +46,57 @@ def get_random_seq_ids():  # for eda/debugging
     return shuffle(get_seq_ids(), random_state=367)[:2000]
 
 
+def train_val_split(seq_ids=None):
+    if seq_ids is None:
+        seq_ids = get_seq_ids()
+    part_ids = get_part_ids(seq_ids)
+    train_idxs, val_idxs = next(GroupShuffleSplit(n_splits=1, test_size=0.1,
+                                                  random_state=89).split(seq_ids, seq_ids, part_ids))
+    return seq_ids[train_idxs], seq_ids[val_idxs]
+
+
+def get_part_ids(seq_ids):
+    filtered_meta = get_meta().filter(pl.col('sequence_id').is_in(seq_ids))
+    part_ids = filtered_meta.select('participant_id').collect().to_numpy().flatten()
+    meta_seq_ids = filtered_meta.select('sequence_id').collect().to_numpy().flatten()
+    part_ids[np.argsort(seq_ids, axis=0)] = part_ids[np.argsort(meta_seq_ids, axis=0)]
+    return part_ids
+
+
 def get_paths(seq_ids):
-    meta = get_meta()
-    filtered_meta = meta.filter(pl.col('sequence_id').is_in(seq_ids))
+    filtered_meta = get_meta().filter(pl.col('sequence_id').is_in(seq_ids))
     paths = filtered_meta.select('path').collect().to_numpy().flatten()
     meta_seq_ids = filtered_meta.select('sequence_id').collect().to_numpy().flatten()
     paths[np.argsort(seq_ids, axis=0)] = paths[np.argsort(meta_seq_ids, axis=0)]
-    return paths
+    full_paths = ['raw_data/' + path for path in paths.tolist()]
+    return full_paths
 
 
 def get_phrases(seq_ids):
-    meta = get_meta()
-    filtered_meta = meta.filter(pl.col('sequence_id').is_in(seq_ids))
+    filtered_meta = get_meta().filter(pl.col('sequence_id').is_in(seq_ids))
     phrases = filtered_meta.select('phrase').collect().to_numpy().flatten()
     meta_seq_ids = filtered_meta.select('sequence_id').collect().to_numpy().flatten()
     phrases[np.argsort(seq_ids, axis=0)] = phrases[np.argsort(meta_seq_ids, axis=0)]
     return phrases
 
 
-# def get_signs(paths):  # more efficient than getting signs one by one from polars LazyFrame
-#     cropped_paths = ['/'.join(path.split('/')[1:]) for path in paths]
-#     signs = pl.scan_csv('raw_data/train.csv').filter(pl.col('path').is_in(cropped_paths)).select('sign') \
-#         .collect().to_numpy().flatten()
-#     train_df_paths = pl.scan_csv('raw_data/train.csv').select('path').filter(pl.col('path').is_in(cropped_paths)) \
-#         .collect().to_numpy().flatten()  # is in different order from cropped_paths
-#     signs[np.argsort(cropped_paths)] = signs[np.argsort(train_df_paths)]  # matches via sort, then unsorts
-#     return signs
+def phrases_to_labels(phrases):
+    with open('raw_data/character_to_prediction_index.json') as file:
+        idx_dict = json.load(file)
+    labels = []
+    for phrase in phrases:
+        label = np.empty(len(phrase))
+        for i, char in enumerate(phrase):
+            label[i] = idx_dict[char]
+        labels.append(label)
+    return labels
+
+
+def slow_get_seqs(seq_ids):
+    paths = get_paths(seq_ids)
+    seqs = []
+    for seq_id, path in tqdm(list(zip(seq_ids, paths)), file=sys.stdout):
+        seq = pl.scan_parquet(path).filter(pl.col('sequence_id') == seq_id).collect().to_numpy()[:, 1:-1]\
+            .reshape((-1, 3, POINTS_PER_FRAME)).transpose(0, 2, 1)
+        seqs.append(seq)
+    return seqs
