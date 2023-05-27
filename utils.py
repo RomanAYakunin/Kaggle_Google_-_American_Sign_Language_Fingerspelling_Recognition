@@ -116,5 +116,5 @@ def accuracy_score(outputs, labels):  # works with torch tensors TODO see if the
     len_sum, dist_sum = 0, 0
     for output, label in zip(outputs, labels):
         len_sum += len(label)
-        dist_sum += editdistance.eval(proc_model_output(output), label)
+        dist_sum += editdistance.eval(proc_model_output(output).tolist(), label.tolist())
     return (len_sum - dist_sum) / len_sum

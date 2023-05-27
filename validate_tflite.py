@@ -31,7 +31,7 @@ for i, (seq, label) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.
     output = prediction_fn(inputs=seq)
     time_sum += time.time() - time_start
     output = np.argmax(output['outputs'], axis=-1)
-    dist_sum += editdistance.eval(output, label - 1)
+    dist_sum += editdistance.eval(output.tolist(), (label - 1).tolist())
     pbar.set_postfix_str(f'mean accuracy = {(len_sum - dist_sum) / len_sum:.9f}, '
                          f'mean pred time = {1e3 * time_sum / (i + 1):.9f} ms')
 print('accuracy:', (len_sum - dist_sum) / len_sum)
