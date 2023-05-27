@@ -103,7 +103,7 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         self.feature_norms = nn.ModuleList([AxisLayerNorm(end - start, self.num_axes, 2)
                                             for start, end in self.norm_ranges])
 
-        self.dim = 1408
+        self.dim = 768
         self.num_heads = 128
 
         self.input_net = nn.Sequential(
@@ -120,7 +120,6 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1)
         self.sliding_attn2 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
         self.sliding_attn3 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
-        self.sliding_attn4 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
         self.output_lin = nn.Linear(self.dim, 60)
 
     def forward(self, x):  # [N, L, num_points, num_axes]
@@ -135,6 +134,5 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         sliding_attn1_out = self.sliding_attn1(input_net_out, mask)
         sliding_attn2_out = self.sliding_attn2(sliding_attn1_out, mask)
         sliding_attn3_out = self.sliding_attn3(sliding_attn2_out, mask)
-        sliding_attn4_out = self.sliding_attn3(sliding_attn3_out, mask)
-        out = self.output_lin(sliding_attn4_out)
+        out = self.output_lin(sliding_attn3_out)
         return out
