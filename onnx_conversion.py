@@ -71,6 +71,8 @@ class InferenceModel(tf.Module):
 infer_model = InferenceModel()
 tf.saved_model.save(infer_model, tf_infer_model_dir, signatures={'serving_default': infer_model.call})
 converter = tf.lite.TFLiteConverter.from_saved_model(tf_infer_model_dir)
+converter.optimizations = [tf.lite.Optimize.DEFAULT]  # TODO look at the experimental stuff you saw
+converter.target_spec.supported_types = [tf.float16]
 tflite_model = converter.convert()
 
 with open(tflite_infer_model_path, 'wb') as file:

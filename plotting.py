@@ -9,13 +9,15 @@ from dataset import FeatureGenerator, get_seqs
 import json
 from copy import deepcopy
 from utils import get_random_seq_ids, get_phrases
+from augmentation import AugmentBatch
 
 
 def plot_sample(x, phrase, save_path):  # x.shape = [num_frames, num_features]
     print(x.shape)
     print(phrase)
+    x = deepcopy(x)
     fig, ax = plt.subplots()
-    fig.suptitle(f'{phrase}, # of frames = {x.shape[0]}')
+    fig.suptitle(f'{phrase}, seq len = {x.shape[0]}')
     x[:, :, 1] *= -1 * 1.5/0.9096226349071285  # TODO modify this
     plt.gcf().set_dpi(300)
     def plot_sample_frame(frame_idx):
@@ -30,8 +32,17 @@ def plot_sample(x, phrase, save_path):  # x.shape = [num_frames, num_features]
     anim.save(save_path, writer=PillowWriter(fps=30))
 
 
-seq_id = get_random_seq_ids()[38]
+seq_id = get_random_seq_ids()[167]
 seq = get_seqs([seq_id])[0]
 phrase = get_phrases([seq_id])[0]
 
 plot_sample(seq, phrase, save_path='plots/sample.gif')
+
+
+def augment(x):
+    x = torch.from_numpy(x).unsqueeze(0).cuda()
+    x = AugmentBatch().cuda()(x)
+    return x.squeeze().cpu().numpy()
+
+
+plot_sample(augment(seq), phrase, save_path='plots/augmented.gif')

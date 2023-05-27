@@ -18,7 +18,7 @@ model = Model()
 model.load_state_dict(torch.load('saved_models/test_model.pt'))
 model.eval()
 
-_, val_seq_ids = train_val_split(shuffle(get_seq_ids(), random_state=9773)[:60000])
+_, val_seq_ids = train_val_split()
 seqs = get_seqs(val_seq_ids)
 labels = phrases_to_labels(get_phrases(val_seq_ids))
 
