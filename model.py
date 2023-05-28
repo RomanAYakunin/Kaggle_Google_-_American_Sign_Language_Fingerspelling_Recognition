@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from dataset import FeatureGenerator
 import torch.nn.functional as F
+from copy import deepcopy
 
 
 class PositionalEncoding(nn.Module):
@@ -24,13 +25,13 @@ class PositionalEncoding(nn.Module):
 class SlidingATTN(nn.Module):
     def __init__(self, dim, num_heads, window_size, dilation):  # window_size must be odd
         super(SlidingATTN, self).__init__()
+        FG = FeatureGenerator()
         self.num_heads = num_heads
         self.window_size = window_size
         self.dilation = dilation
 
         self.attn_lin = nn.Linear(dim, num_heads)
-        self.pos_component = nn.Parameter(torch.Tensor(torch.zeros(1, 1, window_size, num_heads)))
-        nn.init.xavier_uniform_(self.pos_component)
+        self.pos_lin = nn.Linear(dim, (window_size + 1) * num_heads)
         self.v_lin = nn.Sequential(
             nn.Linear(dim, dim),
             nn.LayerNorm(dim),
@@ -44,28 +45,40 @@ class SlidingATTN(nn.Module):
         )
 
         indices_buffer = dilation * torch.arange(window_size).unsqueeze(0) + \
-                         torch.arange(FeatureGenerator().max_len).unsqueeze(1)
+                         torch.arange(FG.max_len).unsqueeze(1)  # [max_len, window_size]
+        indices_buffer -= dilation * (window_size // 2)
+        indices_buffer = torch.where(indices_buffer < 0,
+                                     torch.full_like(indices_buffer, fill_value=FG.max_len),
+                                     indices_buffer)
         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
 
     def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]  # TODO remove t
-        attn = torch.exp(self.attn_lin(x)) * (~mask).to(torch.float32).unsqueeze(2)  # [N, L, num_heads]
-        attn = self._extract_sliding_windows(attn) * torch.exp(self.pos_component)
-        attn = attn / (torch.sum(attn, dim=2, keepdim=True) + 1e-5)
+        attn_exp = torch.exp(self.attn_lin(x)) * (~mask).to(torch.float32).unsqueeze(2)  # [N, L, num_heads]
+        attn = attn_exp / (torch.sum(attn_exp, dim=1, keepdim=True) + 1e-5)
+        v = self.v_lin(x)
+        g_pool = torch.sum(attn.unsqueeze(3) * v.reshape(x.shape[0], x.shape[1], self.num_heads, -1), dim=1)
+        g_pool = g_pool.reshape(x.shape[0], -1)  # [N, dim]
+        pos_component = torch.exp(self.pos_lin(g_pool).reshape(-1, 1, self.window_size + 1, self.num_heads))
 
-        v = self._extract_sliding_windows(self.v_lin(x))  # [N, L, window_size, out_dim]
-        v = v.reshape(x.shape[0], x.shape[1], self.window_size, self.num_heads, -1)
+        attn_win = self._extract_sliding_windows(attn_exp)  # [N, L, window_size, num_heads]
+        attn_win = torch.cat([torch.ones(x.shape[0], x.shape[1], 1, self.num_heads, device=x.device), attn_win], dim=2)
+        attn_win = attn_win * pos_component  # [N, L, window_size + 1, num_heads]
+        attn_win = attn_win / (torch.sum(attn_win, dim=2, keepdim=True) + 1e-5)
+        v = self._extract_sliding_windows(v)  # [N, L, window_size, out_dim]
+        v = v.reshape(x.shape[0], x.shape[1], self.window_size, self.num_heads, -1)  # [N, L, window_size, num_heads, head_dim]
 
-        out = torch.sum(attn.unsqueeze(4) * v, dim=2)  # [N, L, num_heads, head_dim]
+        out = torch.sum(attn_win[:, :, :self.window_size].unsqueeze(4) * v, dim=2)  # [N, L, num_heads, head_dim]
+        out = out + \
+              (attn_win[:, :, 0].unsqueeze(3) * g_pool.reshape(x.shape[0], 1, self.num_heads, -1))
         out = out.reshape(x.shape[0], x.shape[1], -1)  # [N, L, out_dim]
         out = self.out_lin(out)
         return out + x
 
     def _extract_sliding_windows(self, x):
-        padding = self.dilation * self.window_size // 2
         indices = self.indices_buffer[:x.shape[1]]
-        x = torch.cat([torch.zeros(x.shape[0], padding, x.shape[2], dtype=torch.float32, device=x.device),
-                       x,
-                       torch.zeros(x.shape[0], padding, x.shape[2], dtype=torch.float32, device=x.device)], dim=1)
+        indices = torch.minimum(indices, torch.full_like(indices, fill_value=x.shape[1] - 1))
+        x = torch.cat([x,
+                       torch.zeros(x.shape[0], 1, x.shape[2], dtype=torch.float32, device=x.device)], dim=1)
         x = x[:, indices]
         return x
 
@@ -104,7 +117,7 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
                                             for start, end in self.norm_ranges])
 
         self.dim = 768
-        self.num_heads = 128
+        self.num_heads = 32
 
         self.input_net = nn.Sequential(
             nn.Linear(2 * self.num_points * self.num_axes, 2 * self.dim),  # TODO try turning off bias
