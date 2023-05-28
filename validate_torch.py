@@ -14,8 +14,13 @@ from model import Model
 import torch
 from utils import proc_model_output
 
+
+model_path = 'saved_models/test_model.pt'
+
+print(f'model size: {os.path.getsize(model_path) / 2**20} MB')  # TODO check if maybe 2^ is the problem
+
 model = Model()
-model.load_state_dict(torch.load('saved_models/debug_model.pt'))
+model.load_state_dict(torch.load(model_path))
 model.eval()
 
 _, val_seq_ids = train_val_split()

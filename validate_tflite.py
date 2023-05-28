@@ -12,7 +12,7 @@ import time
 from dataset import get_seqs
 
 tflite_model_path = 'submissions/model.tflite'
-print(f'model size: {os.path.getsize(tflite_model_path) / 2**20} MB')
+print(f'model size: {os.path.getsize(tflite_model_path) / 2**20} MB')  # TODO check if maybe 2^ is the problem
 
 interpreter = tf.lite.Interpreter(tflite_model_path)
 
