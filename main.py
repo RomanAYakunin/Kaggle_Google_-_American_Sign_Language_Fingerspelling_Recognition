@@ -14,7 +14,7 @@ from utils import get_seq_ids, train_val_split
 # NPZDataset.create(train_seq_ids, 'proc_data/train.npz', crop_labels=True)
 # NPZDataset.create(val_seq_ids, 'proc_data/val.npz', crop_labels=False)
 
-batch_size = 64
+batch_size = 128
 model = Model().cuda()
 FG = FeatureGenerator()
 summary(model, input_size=(2, FG.max_len, FG.num_points, FG.num_axes))

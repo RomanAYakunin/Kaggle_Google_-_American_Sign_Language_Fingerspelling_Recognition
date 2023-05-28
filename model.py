@@ -88,6 +88,43 @@ class SlidingATTN(nn.Module):
         return x
 
 
+class ConvBlock(nn.Module):
+    def __init__(self, dim, window_size, dilation):  # window_size must be odd
+        super(ConvBlock, self).__init__()
+        FG = FeatureGenerator()
+        self.window_size = window_size
+        self.dilation = dilation
+
+        self.lin = nn.Sequential(
+            nn.Linear(window_size * dim, dim),
+            nn.LayerNorm(dim),
+            nn.ELU(),
+            nn.Dropout(0.5)
+        )
+
+        indices_buffer = dilation * torch.arange(window_size).unsqueeze(0) + \
+                         torch.arange(FG.max_len).unsqueeze(1)  # [max_len, window_size]
+        indices_buffer -= dilation * (window_size // 2)
+        indices_buffer = torch.where(indices_buffer < 0,
+                                     torch.full_like(indices_buffer, fill_value=FG.max_len),
+                                     indices_buffer)
+        self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
+
+    def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]  # TODO remove t
+        win_x = self._extract_sliding_windows(x).reshape(x.shape[0], x.shape[1], -1)
+        out = self.lin(win_x) + x
+        out = out * (~mask).to(torch.float32).unsqueeze(2)
+        return out
+
+    def _extract_sliding_windows(self, x):
+        indices = self.indices_buffer[:x.shape[1]]
+        indices = torch.minimum(indices, torch.full_like(indices, fill_value=x.shape[1]))
+        x = torch.cat([x,
+                       torch.zeros(x.shape[0], 1, x.shape[2], dtype=torch.float32, device=x.device)], dim=1)
+        x = x[:, indices]
+        return x
+
+
 class AxisLayerNorm(nn.Module):
     def __init__(self, num_points, num_axes, dim):
         super(AxisLayerNorm, self).__init__()
