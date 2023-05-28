@@ -110,7 +110,7 @@ class ConvBlock(nn.Module):
                                      indices_buffer)
         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
 
-    def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]  # TODO remove t
+    def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]
         win_x = self._extract_sliding_windows(x).reshape(x.shape[0], x.shape[1], -1)
         out = self.lin(win_x) + x
         out = out * (~mask).to(torch.float32).unsqueeze(2)
