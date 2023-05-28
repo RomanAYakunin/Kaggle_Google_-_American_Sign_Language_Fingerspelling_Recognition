@@ -31,7 +31,12 @@ class SlidingATTN(nn.Module):
         self.dilation = dilation
 
         self.attn_lin = nn.Linear(dim, num_heads)
-        self.pos_lin = nn.Linear(dim, (window_size + 1) * num_heads)
+        self.pos_net = nn.Sequential(
+            nn.Linear(dim, num_heads),
+            nn.LayerNorm(num_heads),
+            nn.ELU(),
+            nn.Linear(num_heads, (window_size + 1) * num_heads)
+        )
         self.v_lin = nn.Sequential(
             nn.Linear(dim, dim),
             nn.LayerNorm(dim),
@@ -58,7 +63,7 @@ class SlidingATTN(nn.Module):
         v = self.v_lin(x)
         g_pool = torch.sum(attn.unsqueeze(3) * v.reshape(x.shape[0], x.shape[1], self.num_heads, -1), dim=1)
         g_pool = g_pool.reshape(x.shape[0], -1)  # [N, dim]
-        pos_component = torch.exp(self.pos_lin(g_pool).reshape(-1, 1, self.window_size + 1, self.num_heads))
+        pos_component = torch.exp(self.pos_net(g_pool).reshape(-1, 1, self.window_size + 1, self.num_heads))
 
         attn_win = self._extract_sliding_windows(attn_exp)  # [N, L, window_size, num_heads]
         attn_win = torch.cat([torch.ones(x.shape[0], x.shape[1], 1, self.num_heads, device=x.device), attn_win], dim=2)
@@ -76,7 +81,7 @@ class SlidingATTN(nn.Module):
 
     def _extract_sliding_windows(self, x):
         indices = self.indices_buffer[:x.shape[1]]
-        indices = torch.minimum(indices, torch.full_like(indices, fill_value=x.shape[1] - 1))
+        indices = torch.minimum(indices, torch.full_like(indices, fill_value=x.shape[1]))
         x = torch.cat([x,
                        torch.zeros(x.shape[0], 1, x.shape[2], dtype=torch.float32, device=x.device)], dim=1)
         x = x[:, indices]
@@ -130,9 +135,10 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
             nn.Dropout(0.5),
         )
         self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.max_len)
-        self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1)
-        self.sliding_attn2 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
-        self.sliding_attn3 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
+        self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=9, dilation=1)
+        self.sliding_attn2 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=9, dilation=3)
+        self.sliding_attn3 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=9, dilation=3)
+        self.sliding_attn4 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=9, dilation=3)
         self.output_lin = nn.Linear(self.dim, 60)
 
     def forward(self, x):  # [N, L, num_points, num_axes]
@@ -147,5 +153,6 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         sliding_attn1_out = self.sliding_attn1(input_net_out, mask)
         sliding_attn2_out = self.sliding_attn2(sliding_attn1_out, mask)
         sliding_attn3_out = self.sliding_attn3(sliding_attn2_out, mask)
-        out = self.output_lin(sliding_attn3_out)
+        sliding_attn4_out = self.sliding_attn4(sliding_attn3_out, mask)
+        out = self.output_lin(sliding_attn4_out)
         return out
