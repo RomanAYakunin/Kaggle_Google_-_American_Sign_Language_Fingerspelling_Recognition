@@ -45,7 +45,8 @@ class SlidingATTN(nn.Module):
         self.out_lin = nn.Sequential(
             nn.Linear(dim, dim),
             nn.LayerNorm(dim),
-            nn.ELU()
+            nn.ELU(),
+            nn.Dropout(0.5)
         )
 
         indices_buffer = dilation * torch.arange(window_size).unsqueeze(0) + \
@@ -127,9 +128,11 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
             nn.Linear(2 * self.num_points * self.num_axes, 2 * self.dim),  # TODO try turning off bias
             nn.LayerNorm(2 * self.dim),
             nn.ELU(),
+            nn.Dropout(0.5),
             nn.Linear(2 * self.dim, self.dim),
             nn.LayerNorm(self.dim),
-            nn.ELU()
+            nn.ELU(),
+            nn.Dropout(0.5)
         )
         self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.max_len)
         self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1)

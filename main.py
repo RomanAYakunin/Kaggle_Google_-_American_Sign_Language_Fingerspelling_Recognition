@@ -19,7 +19,7 @@ model = Model().cuda()
 FG = FeatureGenerator()
 summary(model, input_size=(2, FG.max_len, FG.num_points, FG.num_axes))
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.0)  # TODO restart with proper lr
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)  # TODO restart with proper lr
 
 train_dataloader = get_dataloader(save_path='proc_data/train.npz', batch_size=batch_size, shuffle=True)
 val_dataloader = get_dataloader(save_path='proc_data/val.npz', batch_size=batch_size, shuffle=False)
