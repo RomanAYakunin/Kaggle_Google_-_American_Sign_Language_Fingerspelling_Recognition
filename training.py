@@ -22,7 +22,7 @@ def train(model, train_dataloader, epochs, optimizer, scheduler=None,
         inf_count = 0
         for batch_i, batch in enumerate(pbar := tqdm(train_dataloader, file=sys.stdout)):
             pbar.set_description(f'epoch {epoch}/{epochs}')
-            with torch.autocast(device_type='cuda', dtype=torch.float16):
+            with torch.autocast(device_type='cuda', dtype=torch.float16):  # Check if dtype is needed
                 losses, label_lengths = [], []
                 for x, y, xlen, ylen in batch:
                     len_sum += len(x) * x.shape[1]

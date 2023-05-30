@@ -25,6 +25,7 @@ class AugmentBatch(nn.Module):
         x = self.squish_stretch(x, factor_range=(0.75, 1/0.75))
         x = self.rotate(x, max_angle=0.3)
         x = self.point_shift(x, max_shift=0.005)
+        # x = self.frame_dropout(x, dropout=0.5)  # must do this last
 
         x[:, :, :, 1] /= y_correction
         x = (1 - is_nan) * x
@@ -74,3 +75,7 @@ class AugmentBatch(nn.Module):
         x += 2 * (torch.rand(x.shape[0], 1, x.shape[2], self.FG.num_axes, dtype=x.dtype, device=x.device) - 0.5) * \
              max_shift
         return x  # TODO different noises for different body parts and axes? don't noise z-axis?
+
+    def frame_dropout(self, x, dropout):
+        x *= torch.rand(size=(x.shape[0], x.shape[1], 1, 1), device=x.device) > dropout
+        return x

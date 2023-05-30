@@ -19,7 +19,7 @@ model_path = 'saved_models/test_model.pt'
 
 print(f'model size: {os.path.getsize(model_path) / 2**20} MB')  # TODO check if maybe 2^ is the problem
 
-model = Model()
+model = Model(use_checkpoints=False)
 model.load_state_dict(torch.load(model_path))
 model.eval()
 

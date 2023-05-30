@@ -20,7 +20,7 @@ tf_model_dir = 'onnx_conversion/tf_model'
 tf_infer_model_dir = 'onnx_conversion/tf_infer_model'
 tflite_infer_model_path = 'submissions/model.tflite'
 
-model = Model()
+model = Model(use_checkpoints=False)
 model.load_state_dict(torch.load(torch_model_path))
 model.eval()
 model_inputs = torch.ones((1, 40, FG.num_points, FG.num_axes))

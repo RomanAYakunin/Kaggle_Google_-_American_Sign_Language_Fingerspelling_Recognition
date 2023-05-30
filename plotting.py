@@ -32,7 +32,7 @@ def plot_sample(x, phrase, save_path):  # x.shape = [num_frames, num_features]
     anim.save(save_path, writer=PillowWriter(fps=30))
 
 
-seq_id = get_random_seq_ids()[167]
+seq_id = get_random_seq_ids()[1]
 seq = get_seqs([seq_id])[0]
 phrase = get_phrases([seq_id])[0]
 

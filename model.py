@@ -4,6 +4,7 @@ import torch.nn as nn
 from dataset import FeatureGenerator
 import torch.nn.functional as F
 from copy import deepcopy
+from torch.utils.checkpoint import checkpoint
 
 
 class PositionalEncoding(nn.Module):
@@ -23,8 +24,9 @@ class PositionalEncoding(nn.Module):
 
 
 class SlidingATTN(nn.Module):
-    def __init__(self, dim, num_heads, window_size, dilation):  # window_size must be odd
+    def __init__(self, dim, num_heads, window_size, dilation, use_checkpoints=True):  # window_size must be odd
         super(SlidingATTN, self).__init__()
+        self.use_checkpoints = use_checkpoints
         FG = FeatureGenerator()
         self.num_heads = num_heads
         self.window_size = window_size
@@ -57,7 +59,7 @@ class SlidingATTN(nn.Module):
                                      indices_buffer)
         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
 
-    def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]  # TODO remove t
+    def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]
         attn_exp = torch.exp(self.attn_lin(x)) * (~mask).to(torch.float32).unsqueeze(2)  # [N, L, num_heads]
         attn = attn_exp / (torch.sum(attn_exp, dim=1, keepdim=True) + 1e-5)
         v = self.v_lin(x)
@@ -65,19 +67,27 @@ class SlidingATTN(nn.Module):
         g_pool = g_pool.reshape(x.shape[0], -1)  # [N, dim]
         pos_component = torch.exp(self.pos_net(g_pool).reshape(-1, 1, self.window_size + 1, self.num_heads))
 
-        attn_win = self._extract_sliding_windows(attn_exp)  # [N, L, window_size, num_heads]
-        attn_win = torch.cat([torch.ones(x.shape[0], x.shape[1], 1, self.num_heads, device=x.device), attn_win], dim=2)
-        attn_win = attn_win * pos_component  # [N, L, window_size + 1, num_heads]
-        attn_win = attn_win / (torch.sum(attn_win, dim=2, keepdim=True) + 1e-5)
-        v = self._extract_sliding_windows(v)  # [N, L, window_size, out_dim]
-        v = v.reshape(x.shape[0], x.shape[1], self.window_size, self.num_heads, -1)  # [N, L, window_size, num_heads, head_dim]
-
-        out = torch.sum(attn_win[:, :, :self.window_size].unsqueeze(4) * v, dim=2)  # [N, L, num_heads, head_dim]
-        out = out + \
-              (attn_win[:, :, 0].unsqueeze(3) * g_pool.reshape(x.shape[0], 1, self.num_heads, -1))
+        if self.use_checkpoints:
+            out = checkpoint(self.checkpoint_fn, attn_exp, v, g_pool, pos_component)
+        else:
+            out = self.checkpoint_fn(attn_exp, v, g_pool, pos_component)
         out = out.reshape(x.shape[0], x.shape[1], -1)  # [N, L, out_dim]
         out = self.out_lin(out)
         return out + x
+
+    def checkpoint_fn(self, attn_exp, v, g_pool, pos_component):
+        attn_win = self._extract_sliding_windows(attn_exp)  # [N, L, window_size, num_heads]
+        attn_win = torch.cat([torch.ones(v.shape[0], v.shape[1], 1, self.num_heads, device=v.device), attn_win], dim=2)
+        attn_win = attn_win * pos_component  # [N, L, window_size + 1, num_heads]
+        attn_win = attn_win / (torch.sum(attn_win, dim=2, keepdim=True) + 1e-5)
+        v = self._extract_sliding_windows(v)  # [N, L, window_size, out_dim]
+        v = v.reshape(v.shape[0], v.shape[1], self.window_size, self.num_heads,
+                      -1)  # [N, L, window_size, num_heads, head_dim]
+
+        out = torch.sum(attn_win[:, :, :self.window_size].unsqueeze(4) * v, dim=2)  # [N, L, num_heads, head_dim]
+        out = out + \
+              (attn_win[:, :, 0].unsqueeze(3) * g_pool.reshape(v.shape[0], 1, self.num_heads, -1))
+        return out
 
     def _extract_sliding_windows(self, x):
         indices = self.indices_buffer[:x.shape[1]]
@@ -110,7 +120,7 @@ class AxisLayerNorm(nn.Module):
 
 
 class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
-    def __init__(self):
+    def __init__(self, use_checkpoints=True):
         super(Model, self).__init__()
         FG = FeatureGenerator()
         self.num_points = FG.num_points
@@ -135,9 +145,11 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
             nn.Dropout(0.5)
         )
         self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.max_len)
-        self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1)
+        self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1,
+                                         use_checkpoints=use_checkpoints)
         self.sliding_attn_stack = nn.ModuleList([
-            SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3) for _ in range(5)
+            SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3,
+                        use_checkpoints=use_checkpoints) for _ in range(5)
         ])
         self.output_lin = nn.Linear(self.dim, 60)
 

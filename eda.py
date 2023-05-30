@@ -6,6 +6,7 @@ import numpy as np
 from utils import get_seq_ids, get_random_seq_ids, get_paths, get_phrases, get_part_ids
 from sklearn.utils import shuffle
 import matplotlib.pyplot as plt
+from dataset import get_seqs, FeatureGenerator
 
 
 def check_sorted():
@@ -96,4 +97,29 @@ def show_random_seq_stats():
           '-----------------------------------------------------------')
 
 
-show_part_ids()
+def show_hand_stats():
+    print('hand stats:')
+    seqs = get_seqs(get_seq_ids())
+    left_nan = 0
+    right_nan = 0
+    total_nan = np.array([0, 0, 0], dtype=np.float64)
+    FG = FeatureGenerator()
+    left_range = FG.norm_ranges[-2]
+    right_range = FG.norm_ranges[-1]
+    for seq in tqdm(seqs, file=sys.stdout):
+        isnan_left = int(np.all(seq[:, left_range] == 0))
+        isnan_right = int(np.all(seq[:, right_range == 0]))
+        left_nan += isnan_left
+        right_nan += isnan_right
+        total_nan[isnan_left + isnan_right] += 1
+    left_nan /= len(seqs)
+    right_nan /= len(seqs)
+    total_nan /= len(seqs)
+    print('left nan proportion:', left_nan)
+    print('right nan proportion:', right_nan)
+    print('total nan array:', total_nan.tolist())
+
+    print('----------------------------------------------------------'
+          '-----------------------------------------------------------')
+
+show_hand_stats()
