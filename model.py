@@ -121,7 +121,7 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         self.feature_norms = nn.ModuleList([AxisLayerNorm(end - start, self.num_axes, 2)
                                             for start, end in self.norm_ranges])
 
-        self.dim = 1280
+        self.dim = 1024
         self.num_heads = 128
 
         self.input_net = nn.Sequential(
@@ -136,9 +136,9 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         )
         self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.max_len)
         self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1)
-        self.sliding_attn2 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
-        self.sliding_attn3 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
-        self.sliding_attn4 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3)
+        self.sliding_attn_stack = nn.ModuleList([
+            SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3) for _ in range(5)
+        ])
         self.output_lin = nn.Linear(self.dim, 60)
 
     def forward(self, x):  # [N, L, num_points, num_axes]
@@ -150,11 +150,10 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         x = x.reshape(x.shape[0], x.shape[1], -1)
 
         input_net_out = self.pos_enc(self.input_net(x))
-        sliding_attn1_out = self.sliding_attn1(input_net_out, mask)
-        sliding_attn2_out = self.sliding_attn2(sliding_attn1_out, mask)
-        sliding_attn3_out = self.sliding_attn3(sliding_attn2_out, mask)
-        sliding_attn4_out = self.sliding_attn4(sliding_attn3_out, mask)
-        out = self.output_lin(sliding_attn4_out)
+        sliding_attn_out = self.sliding_attn1(input_net_out, mask)
+        for sliding_attn in self.sliding_attn_stack:
+            sliding_attn_out = sliding_attn(sliding_attn_out, mask)
+        out = self.output_lin(sliding_attn_out)
         return out
 
 

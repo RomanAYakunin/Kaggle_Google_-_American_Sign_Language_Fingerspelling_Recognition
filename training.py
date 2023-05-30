@@ -73,14 +73,14 @@ def train(model, train_dataloader, epochs, optimizer, scheduler=None,
                 val_acc = accuracy_score(outputs, labels)
                 pbar.set_postfix_str(f'mean train loss = {loss_mean:.4f}, val acc = {val_acc:.4f} | '
                                      f'mean sample len = {len_sum / num_samples:.4f}, '
-                                     f'loss inf rate = {inf_count / num_samples:.4f}')
+                                     f'inf loss rate = {inf_count / num_samples:.4f}')
                 if val_acc > best_val_acc and save_path is not None:
                     torch.save(model.state_dict(), save_path)
                     best_val_acc = val_acc
             else:
                 pbar.set_postfix_str(f'mean train loss = {loss_mean:.4f} | '
                                      f'mean sample len = {len_sum / num_samples:.4f}, '
-                                     f'loss inf rate = {inf_count / num_samples:.4f}')
+                                     f'inf loss rate = {inf_count / num_samples:.4f}')
         if scheduler is not None:
             scheduler.step()
     if val_dataloader is not None:

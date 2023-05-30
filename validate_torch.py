@@ -33,10 +33,11 @@ for i, (seq, label) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.
     len_sum += len(label)
     seq = seq.astype(np.float32)
     time_start = time.time()
-    output = model(torch.from_numpy(seq).unsqueeze(0)).squeeze(0).detach()
-    output = torch.argmax(output, dim=-1)
-    output = proc_model_output(output).numpy()
+    with torch.no_grad():
+        output = model(torch.from_numpy(seq).unsqueeze(0)).squeeze(0).detach()
     time_sum += time.time() - time_start
+    output = torch.argmax(output, dim=-1)
+    output = proc_model_output(output)
     dist_sum += editdistance.eval(output.tolist(), label.tolist())
     pbar.set_postfix_str(f'mean accuracy = {(len_sum - dist_sum) / len_sum:.9f}, '
                          f'mean pred time = {1e3 * time_sum / (i + 1):.9f} ms')

@@ -55,6 +55,7 @@ def train_val_split(seq_ids=None):
     part_ids = get_part_ids(seq_ids)
     train_idxs, val_idxs = next(GroupShuffleSplit(n_splits=1, test_size=0.1,
                                                   random_state=89).split(seq_ids, seq_ids, part_ids))
+    train_idxs, val_idxs = shuffle(train_idxs, random_state=376), shuffle(val_idxs, random_state=162)
     return seq_ids[train_idxs], seq_ids[val_idxs]
 
 
