@@ -12,11 +12,9 @@ from utils import get_seq_ids, train_val_split, get_phrases, label_to_phrase
 from dataset import get_seqs
 import editdistance
 
-_, val_seq_ids = train_val_split(shuffle(get_seq_ids(), random_state=9773)[:60000])
+_, val_seq_ids = train_val_split()
 seq_id = shuffle(val_seq_ids)[0]
 seq = get_seqs([seq_id])[0]
-phrase = get_phrases([seq_id])[0]
-print(phrase)
 
 model = Model().cuda()
 model.load_state_dict(torch.load('saved_models/test_model.pt'))
@@ -26,7 +24,11 @@ with torch.no_grad():
     output = torch.argmax(model(torch.from_numpy(seq).unsqueeze(0).cuda()).squeeze(0), dim=-1)
     model_phrase = label_to_phrase(proc_model_output(output))
 
+phrase = get_phrases([seq_id])[0]
+print(phrase)
 print(model_phrase)
 edit_dist = editdistance.eval(phrase, model_phrase)
+print('phrase len:', len(phrase))
+print('model phrase len:', len(model_phrase))
 print('edit dist:', edit_dist)
 print('acc score:', (len(phrase) - edit_dist)/len(phrase))
