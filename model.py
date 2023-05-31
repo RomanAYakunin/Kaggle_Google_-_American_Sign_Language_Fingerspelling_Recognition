@@ -131,7 +131,7 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         self.feature_norms = nn.ModuleList([AxisLayerNorm(end - start, self.num_axes, 2)
                                             for start, end in self.norm_ranges])
 
-        self.dim = 1024
+        self.dim = 896
         self.num_heads = 128
 
         self.input_net = nn.Sequential(
@@ -149,7 +149,7 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
                                          use_checkpoints=use_checkpoints)
         self.sliding_attn_stack = nn.ModuleList([
             SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3,
-                        use_checkpoints=use_checkpoints) for _ in range(5)
+                        use_checkpoints=use_checkpoints) for _ in range(7)
         ])
         self.output_lin = nn.Linear(self.dim, 60)
 
