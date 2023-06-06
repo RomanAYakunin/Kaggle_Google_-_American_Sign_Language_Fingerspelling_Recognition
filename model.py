@@ -119,6 +119,22 @@ class AxisLayerNorm(nn.Module):
         return x
 
 
+class HandFeatures(nn.Module):
+    def __init__(self):
+        super(HandFeatures, self).__init__()
+        rows = torch.arange(21).unsqueeze(1).repeat(1, 21).flatten()
+        cols = torch.arange(21).unsqueeze(0).repeat(21, 1).flatten()
+        idxs = rows + cols < 20
+        rows, cols = rows[idxs], cols[idxs]
+        self.register_buffer('rows', rows)
+        self.register_buffer('cols', cols)
+        self.out_dim = len(rows)
+
+    def forward(self, x):  # [N, L, 21, num_axes]  TODO try incorporating z axis into dists
+        dists = torch.linalg.vector_norm(x[..., self.rows, :2] - x[..., self.cols, :2], dim=-1)  # [N, L, 210]
+        return dists
+
+
 class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
     def __init__(self, use_checkpoints=True):
         super(Model, self).__init__()
@@ -127,15 +143,19 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         self.num_axes = FG.num_axes
         self.norm_ranges = FG.norm_ranges
 
+        self.left_range = FG.norm_ranges[-2]
+        self.right_range = FG.norm_ranges[-1]
+        self.hand_features = HandFeatures()
         self.x_norm = AxisLayerNorm(self.num_points, self.num_axes, (1, 2))
         self.feature_norms = nn.ModuleList([AxisLayerNorm(end - start, self.num_axes, 2)
                                             for start, end in self.norm_ranges])
 
+        self.input_dim = 2 * self.hand_features.out_dim + 2 * self.num_points * self.num_axes
         self.dim = 896
         self.num_heads = 128
 
         self.input_net = nn.Sequential(
-            nn.Linear(2 * self.num_points * self.num_axes, 2 * self.dim),  # TODO try turning off bias
+            nn.Linear(self.input_dim, 2 * self.dim),  # TODO try turning off bias
             nn.LayerNorm(2 * self.dim),
             nn.ELU(),
             nn.Dropout(0.5),
@@ -155,11 +175,12 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
 
     def forward(self, x):  # [N, L, num_points, num_axes]
         mask = torch.all(torch.all(x == 0, dim=2), dim=2)  # [N, L]
-        normed_x = self.x_norm(x)
+        left_features = self.hand_features(x[..., self.left_range[0]: self.left_range[1], :])
+        right_features = self.hand_features(x[..., self.right_range[0]: self.right_range[1], :])
+        normed_x = self.x_norm(x).flatten(start_dim=2)
         normed_features = torch.cat([self.feature_norms[i](x[:, :, start: end])  # TODO make use of symmetry?
-                                     for i, (start, end) in enumerate(self.norm_ranges)], dim=2)
-        x = torch.cat([normed_x, normed_features], dim=2)
-        x = x.reshape(x.shape[0], x.shape[1], -1)
+                                     for i, (start, end) in enumerate(self.norm_ranges)], dim=2).flatten(start_dim=2)
+        x = torch.cat([left_features, right_features, normed_x, normed_features], dim=2)
 
         input_net_out = self.pos_enc(self.input_net(x))
         sliding_attn_out = self.sliding_attn1(input_net_out, mask)

@@ -70,8 +70,7 @@ class FeatureGenerator(nn.Module):
         self.register_buffer('reflect_arr', reflect_arr)
         self.num_points = len(self.point_arr)
         self.num_axes = 2
-        self.max_len = 800
-        self.nan_value = 0
+        self.max_len = 800  # TODO maybe make higher
 
 
 def get_column_names(filter_columns=True):

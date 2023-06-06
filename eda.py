@@ -1,5 +1,6 @@
 import os
 import sys
+
 from tqdm import tqdm
 import polars as pl
 import numpy as np
@@ -48,17 +49,12 @@ def show_part_ids():
           '-----------------------------------------------------------')
 
 
-def show_random_seq_stats():
-    print('stats for 2000 random sequences:')
-    seq_ids = get_random_seq_ids()
-    paths = get_paths(seq_ids)
-    seq_lens = []
-    for seq_id, path in tqdm(list(zip(seq_ids, paths)), file=sys.stdout):
-        seq_len = len(pl.scan_parquet(path).select('sequence_id').filter(pl.col('sequence_id') == seq_id)\
-            .collect())
-        seq_lens.append(seq_len)
-    seq_lens = np.array(seq_lens)
-    plt.hist(seq_lens, bins=50)
+def show_seq_stats(mode='all'):
+    print(f'stats for {mode} sequences:\n')
+    seq_ids = get_seq_ids(mode=mode)
+    seqs = get_seqs(seq_ids)
+    seq_lens = np.array([len(seq) for seq in seqs])
+    plt.hist(seq_lens, bins=np.max(seq_lens) - np.min(seq_lens))
     plt.title('histogram of seq_lens')
     plt.show()
     print('mean seq len:', np.mean(seq_lens))
@@ -85,7 +81,7 @@ def show_random_seq_stats():
     plt.show()
 
     seq_to_phrase_ratios = seq_lens / phrase_lens
-    plt.hist(seq_to_phrase_ratios, bins=50)
+    plt.hist(seq_to_phrase_ratios, bins=200)
     plt.title('histogram of seq to phrase ratios')
     plt.show()
     print('mean seq to phrase ratio:', np.mean(seq_to_phrase_ratios))
@@ -97,29 +93,57 @@ def show_random_seq_stats():
           '-----------------------------------------------------------')
 
 
-def show_hand_stats():
-    print('hand stats:')
-    seqs = get_seqs(get_seq_ids())
+def show_hand_stats(mode='all'):
+    print(f'hand stats for {mode} sequences:\n')
+    seq_ids = get_seq_ids(mode=mode)
+    seqs = get_seqs(seq_ids)
     left_nan = 0
     right_nan = 0
     total_nan = np.array([0, 0, 0], dtype=np.float64)
+    both_hands_count = 0
+    one_dom_ratios = []
     FG = FeatureGenerator()
     left_range = FG.norm_ranges[-2]
     right_range = FG.norm_ranges[-1]
-    for seq in tqdm(seqs, file=sys.stdout):
-        isnan_left = int(np.all(seq[:, left_range] == 0))
-        isnan_right = int(np.all(seq[:, right_range == 0]))
+    for i, seq in enumerate(tqdm(seqs, file=sys.stdout)):
+        isnan_left = int(np.all(seq[:, left_range[0]: left_range[1]] == 0))
+        isnan_right = int(np.all(seq[:, right_range[0]: right_range[1]] == 0))
         left_nan += isnan_left
         right_nan += isnan_right
         total_nan[isnan_left + isnan_right] += 1
+        if isnan_left + isnan_right == 0:
+            both_hands_count += 1
+            left_not_nan = np.sum(np.any(seq[:, left_range[0]: left_range[1]] != 0, axis=(1, 2)).astype(np.float64))
+            right_not_nan = np.sum(np.any(seq[:, right_range[0]: right_range[1]] != 0, axis=(1, 2)).astype(np.float64))
+            neither_nan = left_not_nan + right_not_nan
+            one_dom_ratios.append(max(left_not_nan/neither_nan, right_not_nan/neither_nan))
     left_nan /= len(seqs)
     right_nan /= len(seqs)
     total_nan /= len(seqs)
     print('left nan proportion:', left_nan)
     print('right nan proportion:', right_nan)
     print('total nan array:', total_nan.tolist())
+    if both_hands_count != 0:
+        one_dom_ratios = np.array(one_dom_ratios)  # TODO get examples for various ratios
+        print('one dom ratios mean:', np.mean(one_dom_ratios))
+        print('one dom ratios std:', np.std(one_dom_ratios))
+        print('one dom ratios min:', np.min(one_dom_ratios))
+        print('one dom ratios max:', np.max(one_dom_ratios))
+
+        plt.hist(one_dom_ratios, bins=200)
+        plt.title('histogram of one dom ratios')
+        plt.show()
+
+        counts, bins = np.histogram(one_dom_ratios, bins=200)
+        counts = np.cumsum(counts)
+        plt.stairs(counts, bins, fill=True)
+        plt.title('cumulative histogram of one dom ratios')
+        plt.show()
 
     print('----------------------------------------------------------'
           '-----------------------------------------------------------')
 
-show_hand_stats()
+
+mode = 'all'
+# show_seq_stats(mode)
+show_hand_stats(mode)

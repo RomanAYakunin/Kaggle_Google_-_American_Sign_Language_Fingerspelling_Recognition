@@ -40,8 +40,14 @@ def get_meta():
     return pl.concat([train_meta, sup_meta])
 
 
-def get_seq_ids():
-    seq_ids = get_meta().select('sequence_id').collect().to_numpy().flatten()
+def get_seq_ids(mode='all'):
+    if mode == 'all':
+        meta = get_meta()
+    if mode == 'train':
+        meta = pl.scan_csv('raw_data/train.csv')
+    if mode == 'supp':
+        meta = pl.scan_csv('raw_data/supplemental_metadata.csv')
+    seq_ids = meta.select('sequence_id').collect().to_numpy().flatten()
     return seq_ids[seq_ids != 435344989]
 
 

@@ -32,17 +32,18 @@ def plot_sample(x, phrase, save_path):  # x.shape = [num_frames, num_features]
     anim.save(save_path, writer=PillowWriter(fps=30))
 
 
-seq_id = get_random_seq_ids()[1]
+# seq_id = get_random_seq_ids()[1]
+seq_id = 1831970797
 seq = get_seqs([seq_id])[0]
 phrase = get_phrases([seq_id])[0]
 
 plot_sample(seq, phrase, save_path='plots/sample.gif')
 
 
-def augment(x):
-    x = torch.from_numpy(x).unsqueeze(0).cuda()
-    x = AugmentBatch().cuda()(x)
-    return x.squeeze().cpu().numpy()
-
-
-plot_sample(augment(seq), phrase, save_path='plots/augmented.gif')
+# def augment(x):
+#     x = torch.from_numpy(x).unsqueeze(0).cuda()
+#     x = AugmentBatch().cuda()(x)
+#     return x.squeeze().cpu().numpy()
+#
+#
+# plot_sample(augment(seq), phrase, save_path='plots/augmented.gif')
