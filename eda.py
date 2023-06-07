@@ -93,7 +93,7 @@ def show_seq_stats(mode='all'):
           '-----------------------------------------------------------')
 
 
-def show_hand_stats(mode='all'):
+def show_hand_stats(mode='all'):  # TODO update
     print(f'hand stats for {mode} sequences:\n')
     seq_ids = get_seq_ids(mode=mode)
     seqs = get_seqs(seq_ids)
@@ -144,6 +144,5 @@ def show_hand_stats(mode='all'):
           '-----------------------------------------------------------')
 
 
-mode = 'all'
-# show_seq_stats(mode)
-show_hand_stats(mode)
+mode = 'supp'
+show_seq_stats(mode)

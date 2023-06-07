@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from dataset import FeatureGenerator
 from copy import deepcopy
+from model import center_x
 
 
 class AugmentBatch(nn.Module):
@@ -14,35 +15,19 @@ class AugmentBatch(nn.Module):
     def forward(self, x):  # x.shape = [N, num_frames, num_features]  # TODO keep making sure this actually works
         # TODO add perspective transform
         is_nan = (x == 0).to(x.dtype)
-        x -= torch.sum((1 - is_nan) * x, dim=(1, 2), keepdim=True) / \
-             (torch.sum((1 - is_nan), dim=(1, 2), keepdim=True) + 1e-8)
         y_correction = 1.5 / 0.9096226349071285  # TODO find new y_correction
-        x[:, :, :, 1] *= y_correction
+        x[..., 1] *= y_correction
 
         # x = self.augment_angles(x, spec_angle_range=(0.4, 0.6), factor_range=(0.75, 1/0.75))
         # x = self.augment_lines(x, factor_range=(0.75, 1/0.75))
-        x, is_nan = self.flip(x, is_nan)
         x = self.squish_stretch(x, factor_range=(0.75, 1/0.75))
-        x = self.rotate(x, max_angle=0.3)
+        x = self.rotate(x, max_angle=0.3)  # TODO try larger rotation
         x = self.point_shift(x, max_shift=0.005)
         # x = self.frame_dropout(x, dropout=0.5)  # must do this last
 
-        x[:, :, :, 1] /= y_correction
+        x[..., 1] /= y_correction
         x = (1 - is_nan) * x
         return x
-
-    def flip(self, x, is_nan):
-        p = torch.randint(high=2, size=(x.shape[0],), dtype=torch.long, device=x.device)  # 0 = don't flip, 1 = flip
-        x[:, :, :, 0] *= -(2 * p - 1).reshape(-1, 1, 1)  # reflecting chosen samples
-        reflect_arr = self.FG.reflect_arr
-        flipped_samples = torch.argwhere(p).flatten()
-        x[flipped_samples] = torch.index_select(x[flipped_samples],  # permuting indexes
-                                                dim=2,
-                                                index=reflect_arr)
-        is_nan[flipped_samples] = torch.index_select(is_nan[flipped_samples],  # permuting indexes
-                                                     dim=2,
-                                                     index=reflect_arr)
-        return x, is_nan
 
     def squish_stretch(self, x, factor_range):
         factor = factor_range[0] + \

@@ -9,6 +9,7 @@ from dataset import FeatureGenerator, get_seqs
 import json
 from copy import deepcopy
 from utils import get_random_seq_ids, get_phrases
+from model import center_x
 from augmentation import AugmentBatch
 
 
@@ -32,18 +33,25 @@ def plot_sample(x, phrase, save_path):  # x.shape = [num_frames, num_features]
     anim.save(save_path, writer=PillowWriter(fps=30))
 
 
-# seq_id = get_random_seq_ids()[1]
-seq_id = 1831970797
-seq = get_seqs([seq_id])[0]
+def center(x):
+    x = torch.from_numpy(deepcopy(x)).unsqueeze(0)
+    return center_x(x, dim=(1, 2)).squeeze(0).numpy()
+
+
+def augment(x):
+    x = torch.from_numpy(deepcopy(x)).unsqueeze(0).cuda()
+    x = AugmentBatch().cuda()(x)
+    return x.squeeze().cpu().numpy()
+
+
+seq_id = get_random_seq_ids()[10]
+# seq_id = 1831970797
+print('seq id:', seq_id)
 phrase = get_phrases([seq_id])[0]
+full_seq = get_seqs([seq_id], filter_features=False)[0]
+seq = get_seqs([seq_id])[0]
+seq = center(seq)
 
-plot_sample(seq, phrase, save_path='plots/sample.gif')
-
-
-# def augment(x):
-#     x = torch.from_numpy(x).unsqueeze(0).cuda()
-#     x = AugmentBatch().cuda()(x)
-#     return x.squeeze().cpu().numpy()
-#
-#
-# plot_sample(augment(seq), phrase, save_path='plots/augmented.gif')
+plot_sample(seq, phrase, save_path='plots/seq.gif')
+# plot_sample(augment(seq), phrase, save_path='plots/aug_seq.gif')
+plot_sample(full_seq, phrase, save_path='plots/full_seq.gif')
