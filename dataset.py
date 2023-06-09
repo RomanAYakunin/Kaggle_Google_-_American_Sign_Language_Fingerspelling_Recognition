@@ -90,7 +90,7 @@ def get_seqs(seq_ids, filter_features=True, float16=False):
 
 class NPZDataset(Dataset):
     @staticmethod
-    def create(seq_ids, save_path, train):
+    def create(seq_ids, save_path, output_factor=None):
         seqs = get_seqs(seq_ids)
         labels = phrases_to_labels(get_phrases(seq_ids))
         x_list, y_list = [[], []]
@@ -99,11 +99,11 @@ class NPZDataset(Dataset):
             pbar.set_description(f'creating npz dataset {save_path}')
             x_list.append(np.array(x))
             y = np.array(y, dtype=np.int32)
-            if train:
+            if output_factor is not None:
                 con_idxs = np.argwhere(y[1:] == y[:-1]).flatten() + 1
                 if len(con_idxs) != 0:
                     y = np.insert(y, con_idxs, np.zeros_like(con_idxs))
-                y = y[:len(x)]  # ensures that loss won't be nan TODO try center crop/smarter scheme
+                y = y[:output_factor * len(x)]  # ensures that loss won't be nan TODO try center crop/smarter scheme
                 y = y[y != 0]  # ctc loss targets can't contain the blank index
             y_list.append(y)
             xlen_list[i] = len(x)

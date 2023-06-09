@@ -32,7 +32,8 @@ def train(model, train_dataloader, epochs, optimizer, scheduler=None,
                     output = model(x)
                     losses.append(F.ctc_loss(log_probs=F.log_softmax(output, dim=-1).transpose(0, 1),
                                              targets=y.to(torch.long),
-                                             input_lengths=xlen.to(torch.long), target_lengths=ylen.to(torch.long),
+                                             input_lengths=model.output_factor * xlen.to(torch.long),
+                                             target_lengths=ylen.to(torch.long),
                                              reduction='none', zero_infinity=True))
                     inf_count += torch.sum(losses[-1] == 0)
                     label_lengths.append(ylen)
@@ -57,7 +58,7 @@ def train(model, train_dataloader, epochs, optimizer, scheduler=None,
                             output = torch.argmax(model(x), dim=-1)
                             outputs.append(output)
                             labels.append(y)
-                            output_lengths.append(xlen)
+                            output_lengths.append(model.output_factor * xlen)
                             label_lengths.append(ylen)
                     label_lengths = torch.cat(label_lengths)
                     labels = torch.cat(labels).detach().split(label_lengths.detach().tolist())

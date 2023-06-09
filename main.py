@@ -11,8 +11,8 @@ import numpy as np
 from utils import get_seq_ids, train_val_split
 
 # train_seq_ids, val_seq_ids = train_val_split()
-# NPZDataset.create(train_seq_ids, 'proc_data/train.npz', train=True)
-# NPZDataset.create(val_seq_ids, 'proc_data/val.npz', train=False)
+# NPZDataset.create(train_seq_ids, 'proc_data/train.npz', output_factor=2)
+# NPZDataset.create(val_seq_ids, 'proc_data/val.npz')
 
 batch_size = 128
 model = Model().cuda()

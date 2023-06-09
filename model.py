@@ -24,10 +24,9 @@ class PositionalEncoding(nn.Module):
 
 
 class SlidingATTN(nn.Module):
-    def __init__(self, dim, num_heads, window_size, dilation, use_checkpoints=True):  # window_size must be odd
+    def __init__(self, dim, num_heads, window_size, dilation, max_len, use_checkpoints=True):  # window_size must be odd
         super(SlidingATTN, self).__init__()
         self.use_checkpoints = use_checkpoints
-        FG = FeatureGenerator()
         self.num_heads = num_heads
         self.window_size = window_size
         self.dilation = dilation
@@ -52,10 +51,10 @@ class SlidingATTN(nn.Module):
         )
 
         indices_buffer = dilation * torch.arange(window_size).unsqueeze(0) + \
-                         torch.arange(FG.max_len).unsqueeze(1)  # [max_len, window_size]
+                         torch.arange(max_len).unsqueeze(1)  # [max_len, window_size]
         indices_buffer -= dilation * (window_size // 2)
         indices_buffer = torch.where(indices_buffer < 0,
-                                     torch.full_like(indices_buffer, fill_value=FG.max_len),
+                                     torch.full_like(indices_buffer, fill_value=max_len),
                                      indices_buffer)
         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
 
@@ -95,6 +94,20 @@ class SlidingATTN(nn.Module):
         x = torch.cat([x,
                        torch.zeros(x.shape[0], 1, x.shape[2], dtype=x.dtype, device=x.device)], dim=1)
         x = x[:, indices]
+        return x
+
+
+class ATTNStack(nn.Module):
+    def __init__(self, layers, dim, num_heads, window_size, dilation, max_len, use_checkpoints=True):
+        super(ATTNStack, self).__init__()
+        self.attn_list = nn.ModuleList([
+            SlidingATTN(dim=dim, num_heads=num_heads, window_size=window_size, dilation=dilation,
+                        max_len=max_len, use_checkpoints=use_checkpoints) for _ in range(layers)
+        ])
+
+    def forward(self, x, mask):
+        for sliding_attn in self.attn_list:
+            x = sliding_attn(x, mask)
         return x
 
 
@@ -150,6 +163,7 @@ class Model(nn.Module):
     def __init__(self, use_checkpoints=True, adjust_for_tflite=False):
         super(Model, self).__init__()
         FG = FeatureGenerator()
+        self.output_factor = 2
 
         self.preproc = PreProc(adjust_for_tflite)
 
@@ -168,22 +182,31 @@ class Model(nn.Module):
             nn.Dropout(0.5)
         )
         self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.max_len)
-        self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1,
-                                         use_checkpoints=use_checkpoints)
-        self.sliding_attn_stack = nn.ModuleList([
-            SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3,
-                        use_checkpoints=use_checkpoints) for _ in range(7)
-        ])
-        self.output_lin = nn.Linear(self.dim, 60)
+        self.in_attn = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1,
+                                   max_len=FG.max_len, use_checkpoints=use_checkpoints)
+        self.attn_stack = ATTNStack(layers=7, dim=self.dim, num_heads=self.num_heads, window_size=5, dilation=3,
+                                    max_len=FG.max_len, use_checkpoints=use_checkpoints)
+        self.out_attn = SlidingATTN(self.dim // self.output_factor, num_heads=self.num_heads // self.output_factor,
+                                    window_size=9, dilation=1, max_len=self.output_factor * FG.max_len,
+                                    use_checkpoints=use_checkpoints)
+        # self.out_attn_stack = ATTNStack(layers=3, dim=self.dim // self.output_factor,
+        #                                 num_heads=self.num_heads // self.output_factor,
+        #                                 window_size=7, dilation=3, max_len=self.output_factor * FG.max_len,
+        #                                 use_checkpoints=use_checkpoints)
+        self.output_lin = nn.Linear(self.dim // self.output_factor, 60)
 
     def forward(self, x):  # [N, L, num_points, num_axes]
         mask = torch.all(torch.all(x == 0, dim=3), dim=2)  # [N, L]
         x = self.preproc(x, mask)
         input_net_out = self.pos_enc(self.input_net(x))
-        sliding_attn_out = self.sliding_attn1(input_net_out, mask)
-        for sliding_attn in self.sliding_attn_stack:
-            sliding_attn_out = sliding_attn(sliding_attn_out, mask)
-        out = self.output_lin(sliding_attn_out)
+        attn_out = self.in_attn(input_net_out, mask)
+        attn_out = self.attn_stack(attn_out, mask)
+        attn_out = attn_out.reshape(x.shape[0], -1, self.dim // self.output_factor)
+        mask = mask.unsqueeze(2)
+        mask = torch.cat([mask] * self.output_factor, dim=2).flatten(start_dim=1)
+        attn_out = self.out_attn(attn_out, mask)
+        # attn_out = self.out_attn_stack(attn_out, mask)
+        out = self.output_lin(attn_out)
         return out
 
 # import math
