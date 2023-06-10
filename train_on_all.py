@@ -10,8 +10,8 @@ from utils import load_arrs, save_arrs, get_paths, train_val_split
 import numpy as np
 from utils import get_seq_ids, train_val_split
 
-train_seq_ids = get_seq_ids()
-NPZDataset.create(train_seq_ids, 'proc_data/all.npz', crop_labels=True)
+# train_seq_ids = get_seq_ids()
+# NPZDataset.create(train_seq_ids, 'proc_data/all.npz', crop_labels=True)
 
 batch_size = 64
 model = Model().cuda()
