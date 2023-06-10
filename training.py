@@ -9,7 +9,7 @@ from torch.cuda.amp import GradScaler
 from augmentation import AugmentBatch
 
 
-def train(model, train_dataloader, epochs, optimizer, scheduler=None,
+def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, scheduler=None,
           val_dataloader=None, eval_wait=1, save_path=None):  # TODO add augmentation
     num_batches = len(train_dataloader)
     best_val_acc = 0
@@ -23,22 +23,23 @@ def train(model, train_dataloader, epochs, optimizer, scheduler=None,
         for batch_i, batch in enumerate(pbar := tqdm(train_dataloader, file=sys.stdout)):
             pbar.set_description(f'epoch {epoch}/{epochs}')
             with torch.autocast(device_type='cuda', dtype=torch.float16):  # Check if dtype is needed
-                losses, label_lengths = [], []
+                losses = []
                 for x, y, xlen, ylen in batch:
                     len_sum += len(x) * x.shape[1]
                     num_samples += len(x)
                     x, y, xlen, ylen = x.cuda(), y.cuda(), xlen.cuda(), ylen.cuda()
                     x = augment_batch(x)  # AUGMENTING !!!
-                    output = model(x)
-                    losses.append(F.ctc_loss(log_probs=F.log_softmax(output, dim=-1).transpose(0, 1),
-                                             targets=y.to(torch.long),
-                                             input_lengths=xlen.to(torch.long), target_lengths=ylen.to(torch.long),
-                                             reduction='none', zero_infinity=True))
-                    inf_count += torch.sum(losses[-1] == 0)
-                    label_lengths.append(ylen)
-                loss = torch.cat(losses)
-                label_lengths = torch.cat(label_lengths)
-                loss = (loss / label_lengths).mean()
+                    output = F.log_softmax(model(x), dim=-1)
+                    ctc_loss = F.ctc_loss(log_probs=output.transpose(0, 1),
+                                          targets=y.to(torch.long),
+                                          input_lengths=xlen.to(torch.long), target_lengths=ylen.to(torch.long),
+                                          reduction='none', zero_infinity=True) / ylen
+                    kldiv_loss = F.kl_div(input=output, target=torch.ones_like(output) / 60, reduction='none')
+                    kldiv_loss = kldiv_loss.sum(dim=2).mean(dim=1)  # TODO try other variant
+                    loss = (1 - label_smooth) * ctc_loss + label_smooth * kldiv_loss
+                    losses.append(loss)
+                    inf_count += torch.sum(loss == 0)
+                loss = torch.cat(losses).mean()
             optimizer.zero_grad()
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)  # for correct mean loss tracking
