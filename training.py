@@ -81,6 +81,8 @@ def train(model, train_dataloader, epochs, optimizer, scheduler=None,
                 pbar.set_postfix_str(f'mean train loss = {loss_mean:.4f} | '
                                      f'mean sample len = {len_sum / num_samples:.4f}, '
                                      f'inf loss rate = {inf_count / num_samples:.4f}')
+        if val_dataloader is None:
+            torch.save(model.state_dict(), save_path)
         if scheduler is not None:
             scheduler.step()
     if val_dataloader is not None:

@@ -128,9 +128,14 @@ class NPZDataset(Dataset):
         for i, (x, y) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.stdout)):
             pbar.set_description(f'creating npz dataset {save_path}')
             x_list.append(np.array(x))
+            y = np.array(y, dtype=np.int32)
             if crop_labels:
-                y = y[:len(x)]
-            y_list.append(np.array(y, dtype=np.int32))
+                con_idxs = np.argwhere(y[1:] == y[:-1]).flatten() + 1
+                if len(con_idxs) != 0:
+                    y = np.insert(y, con_idxs, np.zeros_like(con_idxs))
+                y = y[:len(x)]  # ensures that loss won't be nan TODO try center crop/smarter scheme
+                y = y[y != 0]  # ctc loss targets can't contain the blank index
+            y_list.append(y)
             xlen_list[i] = len(x)
             ylen_list[i] = len(y)
         x_list = np.concatenate(x_list)
