@@ -9,7 +9,7 @@ from torch.cuda.amp import GradScaler
 from augmentation import AugmentBatch
 
 
-def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, scheduler=None,
+def train(model, train_dataloader, epochs, optimizer, label_smooth=0.1, scheduler=None,
           val_dataloader=None, eval_wait=1, save_path=None):  # TODO add augmentation
     num_batches = len(train_dataloader)
     best_val_acc = 0
@@ -22,7 +22,7 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
         inf_count = 0
         for batch_i, batch in enumerate(pbar := tqdm(train_dataloader, file=sys.stdout)):
             pbar.set_description(f'epoch {epoch}/{epochs}')
-            with torch.autocast(device_type='cuda', dtype=torch.float16):  # Check if dtype is needed
+            with torch.autocast(device_type='cuda', dtype=torch.float16):  # Check if dtype is needed TODO NOW!
                 losses = []
                 for x, y, xlen, ylen in batch:
                     len_sum += len(x) * x.shape[1]
