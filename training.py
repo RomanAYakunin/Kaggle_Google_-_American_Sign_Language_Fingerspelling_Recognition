@@ -9,7 +9,7 @@ from torch.cuda.amp import GradScaler
 from augmentation import AugmentBatch
 
 
-def train(model, train_dataloader, epochs, optimizer, label_smooth=0.1, scheduler=None,
+def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, scheduler=None,
           val_dataloader=None, eval_wait=1, save_path=None):  # TODO add augmentation
     num_batches = len(train_dataloader)
     best_val_acc = 0
