@@ -98,6 +98,41 @@ class SlidingATTN(nn.Module):
         return x
 
 
+class HandFeatures(nn.Module):
+    def __init__(self):
+        super(HandFeatures, self).__init__()
+        rows = torch.arange(21).unsqueeze(1).repeat(1, 21).flatten()
+        cols = torch.arange(21).unsqueeze(0).repeat(21, 1).flatten()
+        idxs = rows + cols < 20
+        rows, cols = rows[idxs], cols[idxs]
+        self.register_buffer('rows', rows)
+        self.register_buffer('cols', cols)
+
+        fingers = [
+            [0, 1, 2, 3, 4],
+            [0, 5, 6, 7, 8],
+            [0, 9, 10, 11, 12],
+            [0, 13, 14, 15, 16],
+            [0, 17, 18, 19, 20]
+        ]
+        angles = []
+        for finger in fingers:
+            for i in range(1, len(finger) - 1):
+                angles.append([finger[i - 1], finger[i], finger[i + 1]])  # s, c, m format
+        self.register_buffer('angles', torch.Tensor(angles).to(torch.long))
+
+        self.out_dim = len(rows) + len(angles)
+
+    def forward(self, x):  # [N, L, 21, num_axes]  TODO try incorporating z axis into dists
+        dists = torch.linalg.vector_norm(x[..., self.rows, :2] - x[..., self.cols, :2], dim=-1)  # [N, L, len(rows)]
+        # TODO try normalizing dists or get hand features after normalizing x
+        s, c, m = x[..., self.angles[:, 0], :2], \
+                  x[..., self.angles[:, 1], :2], \
+                  x[..., self.angles[:, 2], :2]
+        cos_sims = F.cosine_similarity(s - c, m - c, dim=-1, eps=1e-5)  # [N, L, len(finger_angles)]
+        return torch.cat([dists, cos_sims], dim=-1)
+
+
 class AxisLayerNorm(nn.Module):
     def __init__(self, num_points, num_axes, dim):
         super(AxisLayerNorm, self).__init__()
@@ -126,16 +161,19 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         self.num_points = FG.num_points
         self.num_axes = FG.num_axes
         self.norm_ranges = FG.norm_ranges
+        self.lh_range, self.rh_range = FG.norm_ranges[-2], FG.norm_ranges[-1]
 
+        self.hand_features = HandFeatures()
         self.x_norm = AxisLayerNorm(self.num_points, self.num_axes, (1, 2))
         self.feature_norms = nn.ModuleList([AxisLayerNorm(end - start, self.num_axes, 2)
                                             for start, end in self.norm_ranges])
 
+        self.input_dim = 2 * self.num_points * self.num_axes + 2 * self.hand_features.out_dim
         self.dim = 896
         self.num_heads = 128
 
         self.input_net = nn.Sequential(
-            nn.Linear(2 * self.num_points * self.num_axes, 2 * self.dim),  # TODO try turning off bias
+            nn.Linear(self.input_dim, 2 * self.dim),  # TODO try turning off bias
             nn.LayerNorm(2 * self.dim),
             nn.ELU(),
             nn.Dropout(0.5),
@@ -158,8 +196,10 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         normed_x = self.x_norm(x)
         normed_features = torch.cat([self.feature_norms[i](x[:, :, start: end])  # TODO make use of symmetry?
                                      for i, (start, end) in enumerate(self.norm_ranges)], dim=2)
-        x = torch.cat([normed_x, normed_features], dim=2)
-        x = x.reshape(x.shape[0], x.shape[1], -1)
+        lh_features = self.hand_features(normed_x[:, :, self.lh_range[0]: self.lh_range[1]])
+        rh_features = self.hand_features(normed_x[:, :, self.rh_range[0]: self.rh_range[1]])
+        x = torch.cat([normed_x.flatten(start_dim=2), normed_features.flatten(start_dim=2),
+                       lh_features, rh_features], dim=2)
 
         input_net_out = self.pos_enc(self.input_net(x))
         sliding_attn_out = self.sliding_attn1(input_net_out, mask)

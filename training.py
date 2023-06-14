@@ -33,12 +33,12 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
                     ctc_loss = F.ctc_loss(log_probs=output.transpose(0, 1),
                                           targets=y.to(torch.long),
                                           input_lengths=xlen.to(torch.long), target_lengths=ylen.to(torch.long),
-                                          reduction='none', zero_infinity=True) / ylen
+                                          reduction='none', zero_infinity=True)  # why should it be div'd by ylen?
+                    inf_count += torch.sum(ctc_loss == 0)
                     kldiv_loss = F.kl_div(input=output, target=torch.ones_like(output) / 60, reduction='none')
-                    kldiv_loss = kldiv_loss.sum(dim=2).mean(dim=1)  # TODO try other variant
+                    kldiv_loss = kldiv_loss.sum(dim=2).mean(dim=1) * ylen  # TODO explore alternatives
                     loss = (1 - label_smooth) * ctc_loss + label_smooth * kldiv_loss
                     losses.append(loss)
-                    inf_count += torch.sum(loss == 0)
                 loss = torch.cat(losses).mean()
             optimizer.zero_grad()
             scaler.scale(loss).backward()
