@@ -15,7 +15,7 @@ from utils import get_seq_ids, train_val_split
 # NPZDataset.create(val_seq_ids, 'proc_data/val.npz', crop_labels=False)
 
 batch_size = 64
-model = Model().cuda()
+model = Model().cuda()  # TODO verify all steps in SlidingATTN
 FG = FeatureGenerator()
 summary(model, input_size=(2, FG.max_len, FG.num_points, FG.num_axes))
 

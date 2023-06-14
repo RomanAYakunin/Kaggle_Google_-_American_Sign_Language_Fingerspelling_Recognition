@@ -76,11 +76,11 @@ class SlidingATTN(nn.Module):
         return out + x
 
     def checkpoint_fn(self, attn_exp, v, g_pool, pos_component):
-        attn_win = self._extract_sliding_windows(attn_exp)  # [N, L, window_size, num_heads]
+        attn_win = self.extract_sliding_windows(attn_exp)  # [N, L, window_size, num_heads]
         attn_win = torch.cat([torch.ones(v.shape[0], v.shape[1], 1, self.num_heads, device=v.device), attn_win], dim=2)
         attn_win = attn_win * pos_component  # [N, L, window_size + 1, num_heads]
         attn_win = attn_win / (torch.sum(attn_win, dim=2, keepdim=True) + 1e-5)
-        v = self._extract_sliding_windows(v)  # [N, L, window_size, out_dim]
+        v = self.extract_sliding_windows(v)  # [N, L, window_size, out_dim]
         v = v.reshape(v.shape[0], v.shape[1], self.window_size, self.num_heads,
                       -1)  # [N, L, window_size, num_heads, head_dim]
 
@@ -89,7 +89,7 @@ class SlidingATTN(nn.Module):
               (attn_win[:, :, 0].unsqueeze(3) * g_pool.reshape(v.shape[0], 1, self.num_heads, -1))
         return out
 
-    def _extract_sliding_windows(self, x):
+    def extract_sliding_windows(self, x):
         indices = self.indices_buffer[:x.shape[1]]
         indices = torch.minimum(indices, torch.full_like(indices, fill_value=x.shape[1]))
         x = torch.cat([x,
@@ -143,7 +143,7 @@ class AxisLayerNorm(nn.Module):
         self.dim = dim
 
     def forward(self, x):  # [N, L, num_points, num_axes]
-        weight = deepcopy((x != 0).to(x.dtype))
+        weight = (x != 0).to(x.dtype)
         x = x - (torch.sum(x * weight, dim=self.dim, keepdim=True) /
                  (torch.sum(weight, dim=self.dim, keepdim=True) + 1e-5))
         x_std = torch.sqrt(torch.sum(torch.square(x) * weight, dim=self.dim, keepdim=True) /
