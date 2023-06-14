@@ -60,7 +60,7 @@ class SlidingATTN(nn.Module):
         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
 
     def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]
-        attn_exp = torch.exp(self.attn_lin(x)) * (~mask).to(torch.float32).unsqueeze(2)  # [N, L, num_heads]
+        attn_exp = torch.exp(self.attn_lin(x)) * (~mask).to(x.dtype).unsqueeze(2)  # [N, L, num_heads]
         attn = attn_exp / (torch.sum(attn_exp, dim=1, keepdim=True) + 1e-5)
         v = self.v_lin(x)
         g_pool = torch.sum(attn.unsqueeze(3) * v.reshape(x.shape[0], x.shape[1], self.num_heads, -1), dim=1)
@@ -84,7 +84,7 @@ class SlidingATTN(nn.Module):
         v = v.reshape(v.shape[0], v.shape[1], self.window_size, self.num_heads,
                       -1)  # [N, L, window_size, num_heads, head_dim]
 
-        out = torch.sum(attn_win[:, :, :self.window_size].unsqueeze(4) * v, dim=2)  # [N, L, num_heads, head_dim]
+        out = torch.sum(attn_win[:, :, 1:].unsqueeze(4) * v, dim=2)  # [N, L, num_heads, head_dim]
         out = out + \
               (attn_win[:, :, 0].unsqueeze(3) * g_pool.reshape(v.shape[0], 1, self.num_heads, -1))
         return out
@@ -93,7 +93,7 @@ class SlidingATTN(nn.Module):
         indices = self.indices_buffer[:x.shape[1]]
         indices = torch.minimum(indices, torch.full_like(indices, fill_value=x.shape[1]))
         x = torch.cat([x,
-                       torch.zeros(x.shape[0], 1, x.shape[2], dtype=torch.float32, device=x.device)], dim=1)
+                       torch.zeros(x.shape[0], 1, x.shape[2], dtype=x.dtype, device=x.device)], dim=1)
         x = x[:, indices]
         return x
 
@@ -143,7 +143,7 @@ class AxisLayerNorm(nn.Module):
         self.dim = dim
 
     def forward(self, x):  # [N, L, num_points, num_axes]
-        weight = (x != 0).to(torch.float32)
+        weight = deepcopy((x != 0).to(x.dtype))
         x = x - (torch.sum(x * weight, dim=self.dim, keepdim=True) /
                  (torch.sum(weight, dim=self.dim, keepdim=True) + 1e-5))
         x_std = torch.sqrt(torch.sum(torch.square(x) * weight, dim=self.dim, keepdim=True) /
@@ -192,7 +192,7 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         self.output_lin = nn.Linear(self.dim, 60)
 
     def forward(self, x):  # [N, L, num_points, num_axes]
-        mask = torch.all(torch.all(x == 0, dim=2), dim=2)  # [N, L]
+        mask = torch.all(torch.all(x == 0, dim=3), dim=2)  # [N, L]
         normed_x = self.x_norm(x)
         normed_features = torch.cat([self.feature_norms[i](x[:, :, start: end])  # TODO make use of symmetry?
                                      for i, (start, end) in enumerate(self.norm_ranges)], dim=2)
