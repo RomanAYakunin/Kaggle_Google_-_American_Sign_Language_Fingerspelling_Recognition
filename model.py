@@ -13,14 +13,15 @@ class PositionalEncoding(nn.Module):
         self.d_model = dim
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, dim, 2) * (-math.log(10000) / dim))  # TODO try changing 10000
-        angle_arr = position * div_term  # [max_len, dim / 2]
-        pe_sin = torch.sin(angle_arr)
-        pe_cos = torch.cos(angle_arr)  # TODO try different constant than 10_000
-        pe = torch.stack([pe_sin, pe_cos], dim=2).reshape(max_len, -1)
-        self.register_buffer('pe', pe)  # [max_len, dim]
+        self.register_buffer('position', position)
+        self.register_buffer('div_term', div_term)
 
     def forward(self, x):
-        return x + self.pe[:x.shape[1]].unsqueeze(0)
+        angle_arr = self.position[:x.shape[1]] * self.div_term  # [max_len, dim / 2]
+        pe_sin = torch.sin(angle_arr)
+        pe_cos = torch.cos(angle_arr)
+        pe = torch.stack([pe_sin, pe_cos], dim=2).reshape(1, x.shape[1], -1)
+        return x + pe
 
 
 class SlidingATTN(nn.Module):
@@ -209,30 +210,6 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
         return out
 
 
-# import math
-# import torch
-# import torch.nn as nn
-# from dataset import FeatureGenerator
-# import torch.nn.functional as F
-# from copy import deepcopy
-#
-#
-# class PositionalEncoding(nn.Module):
-#     def __init__(self, dim, max_len):
-#         super().__init__()
-#         self.d_model = dim
-#         position = torch.arange(max_len).unsqueeze(1)
-#         div_term = torch.exp(torch.arange(0, dim, 2) * (-math.log(10000) / dim))  # TODO try changing 10000
-#         angle_arr = position * div_term  # [max_len, dim / 2]
-#         pe_sin = torch.sin(angle_arr)
-#         pe_cos = torch.cos(angle_arr)  # TODO try different constant than 10_000
-#         pe = torch.stack([pe_sin, pe_cos], dim=2).reshape(max_len, -1)
-#         self.register_buffer('pe', pe)  # [max_len, dim]
-#
-#     def forward(self, x):
-#         return x + self.pe[:x.shape[1]].unsqueeze(0)
-#
-#
 # class ConvBlock(nn.Module):
 #     def __init__(self, dim, window_size, dilation):  # window_size must be odd
 #         super(ConvBlock, self).__init__()
@@ -240,10 +217,12 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
 #         self.window_size = window_size
 #         self.dilation = dilation
 #
-#         self.lin = nn.Sequential(
+#         self.lin1 = nn.Sequential(
 #             nn.Linear(window_size * dim, dim),
 #             nn.LayerNorm(dim),
-#             nn.ELU(),
+#             nn.ELU()
+#         )
+#         self.lin2 = nn.Sequential(
 #             nn.Linear(dim, dim),
 #             nn.LayerNorm(dim),
 #             nn.ELU()
@@ -257,81 +236,18 @@ class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
 #                                      indices_buffer)
 #         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
 #
-#     def forward(self, x, mask):  # x: [N, L, in_dim], mask: [N, L]  # TODO remove t
+#     def forward(self, x, mask):  # x: [N, L, dim], mask: [N, L]  # TODO remove t
+#         inv_mask = (~mask).to(x.dtype).unsqueeze(2)
+#         x = x * inv_mask
+#         global_pool = torch.sum(x, dim=1, keepdim=True) / torch.sum(inv_mask, dim=1, keepdim=True)
 #         win_x = self._extract_sliding_windows(x).reshape(x.shape[0], x.shape[1], -1)
-#         out = self.lin(win_x) + x
-#         out = out * (~mask).to(torch.float32).unsqueeze(2)
+#         out = self.lin2(self.lin1(win_x) + global_pool) + x
 #         return out
 #
 #     def _extract_sliding_windows(self, x):
 #         indices = self.indices_buffer[:x.shape[1]]
 #         indices = torch.minimum(indices, torch.full_like(indices, fill_value=x.shape[1]))
 #         x = torch.cat([x,
-#                        torch.zeros(x.shape[0], 1, x.shape[2], dtype=torch.float32, device=x.device)], dim=1)
+#                        torch.zeros(x.shape[0], 1, x.shape[2], dtype=x.dtype, device=x.device)], dim=1)
 #         x = x[:, indices]
 #         return x
-#
-#
-# class AxisLayerNorm(nn.Module):
-#     def __init__(self, num_points, num_axes, dim):
-#         super(AxisLayerNorm, self).__init__()
-#         self.gamma = nn.Parameter(torch.empty(1, 1, num_points, num_axes))
-#         self.beta = nn.Parameter(torch.empty(1, 1, num_points, num_axes))
-#         nn.init.xavier_uniform_(self.gamma)
-#         nn.init.xavier_uniform_(self.beta)
-#         self.dim = dim
-#
-#     def forward(self, x):  # [N, L, num_points, num_axes]
-#         weight = (x != 0).to(torch.float32)
-#         x = x - (torch.sum(x * weight, dim=self.dim, keepdim=True) /
-#                  (torch.sum(weight, dim=self.dim, keepdim=True) + 1e-5))
-#         x_std = torch.sqrt(torch.sum(torch.square(x) * weight, dim=self.dim, keepdim=True) /
-#                            (torch.sum(weight, dim=self.dim, keepdim=True) + 1e-5))
-#         x = x / (x_std + 1e-5)
-#         x = self.gamma * x + self.beta
-#         x = x * weight
-#         return x
-#
-#
-# class Model(nn.Module):  # TODO try copying hyperparams from transformer_branch
-#     def __init__(self):
-#         super(Model, self).__init__()
-#         FG = FeatureGenerator()
-#         self.num_points = FG.num_points
-#         self.num_axes = FG.num_axes
-#         self.norm_ranges = FG.norm_ranges
-#
-#         self.x_norm = AxisLayerNorm(self.num_points, self.num_axes, (1, 2))
-#         self.feature_norms = nn.ModuleList([AxisLayerNorm(end - start, self.num_axes, 2)
-#                                             for start, end in self.norm_ranges])
-#
-#         self.dim = 530
-#
-#         self.input_net = nn.Sequential(
-#             nn.Linear(2 * self.num_points * self.num_axes, 2 * self.dim),  # TODO try turning off bias
-#             nn.LayerNorm(2 * self.dim),
-#             nn.ELU(),
-#             nn.Linear(2 * self.dim, self.dim),
-#             nn.LayerNorm(self.dim),
-#             nn.ELU()
-#         )
-#         self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.max_len)
-#         self.sliding_attn1 = ConvBlock(self.dim, window_size=5, dilation=1)
-#         self.sliding_attn2 = ConvBlock(self.dim, window_size=5, dilation=3)
-#         self.sliding_attn3 = ConvBlock(self.dim, window_size=5, dilation=3)
-#         self.output_lin = nn.Linear(self.dim, 60)
-#
-#     def forward(self, x):  # [N, L, num_points, num_axes]
-#         mask = torch.all(torch.all(x == 0, dim=2), dim=2)  # [N, L]
-#         normed_x = self.x_norm(x)
-#         normed_features = torch.cat([self.feature_norms[i](x[:, :, start: end])  # TODO make use of symmetry?
-#                                      for i, (start, end) in enumerate(self.norm_ranges)], dim=2)
-#         x = torch.cat([normed_x, normed_features], dim=2)
-#         x = x.reshape(x.shape[0], x.shape[1], -1)
-#
-#         input_net_out = self.pos_enc(self.input_net(x))
-#         sliding_attn1_out = self.sliding_attn1(input_net_out, mask)
-#         sliding_attn2_out = self.sliding_attn2(sliding_attn1_out, mask)
-#         sliding_attn3_out = self.sliding_attn3(sliding_attn2_out, mask)
-#         out = self.output_lin(sliding_attn3_out)
-#         return out

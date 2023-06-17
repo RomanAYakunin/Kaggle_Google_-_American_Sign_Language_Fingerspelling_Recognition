@@ -23,8 +23,7 @@ model = Model(use_checkpoints=False)
 model.load_state_dict(torch.load(model_path))
 model.eval()
 
-# _, val_seq_ids = train_val_split()
-val_seq_ids, _ = train_val_split()  # TODO undo
+_, val_seq_ids = train_val_split()
 seqs = get_seqs(val_seq_ids)
 labels = phrases_to_labels(get_phrases(val_seq_ids))
 
@@ -35,9 +34,9 @@ for i, (seq, label) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.
     seq = seq.astype(np.float32)
     time_start = time.time()
     with torch.no_grad():
-        # seq = np.concatenate([seq, np.zeros((50, seq.shape[1], seq.shape[2]), dtype=np.float32)])  # TODO remove
+        # seq = np.concatenate([seq, np.zeros((100, seq.shape[1], seq.shape[2]), dtype=np.float32)])  # TODO remove
         output = model(torch.from_numpy(seq).unsqueeze(0)).squeeze(0).detach()
-        # output = output[:-50]  # TODO remove
+        # output = output[:-100]  # TODO remove
     time_sum += time.time() - time_start
     output = torch.argmax(output, dim=-1)
     output = proc_model_output(output)
