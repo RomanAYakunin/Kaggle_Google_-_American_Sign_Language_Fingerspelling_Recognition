@@ -120,21 +120,16 @@ def get_seqs(seq_ids, filter_columns=True):
 
 class NPZDataset(Dataset):
     @staticmethod
-    def create(seq_ids, save_path, crop_labels):
+    def create(seq_ids, save_path):
         seqs = get_seqs(seq_ids)
         labels = phrases_to_labels(get_phrases(seq_ids))
         x_list, y_list = [[], []]
         xlen_list, ylen_list = np.empty(len(seq_ids), dtype=np.int32), np.empty(len(seq_ids), dtype=np.int32)
         for i, (x, y) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.stdout)):
             pbar.set_description(f'creating npz dataset {save_path}')
-            x_list.append(np.array(x))
-            y = np.array(y, dtype=np.int32)
-            if crop_labels:
-                con_idxs = np.argwhere(y[1:] == y[:-1]).flatten() + 1
-                if len(con_idxs) != 0:
-                    y = np.insert(y, con_idxs, np.zeros_like(con_idxs))
-                y = y[:len(x)]  # ensures that loss won't be nan TODO try center crop/smarter scheme
-                y = y[y != 0]  # ctc loss targets can't contain the blank index
+            x, y = np.array(x), np.array(y, dtype=np.int64)
+            y = np.concatenate([np.array([60]), y, np.array([59])])  # adds start & end tokens
+            x_list.append(x)
             y_list.append(y)
             xlen_list[i] = len(x)
             ylen_list[i] = len(y)
@@ -146,22 +141,20 @@ class NPZDataset(Dataset):
         x_list, y_list, xlen_list, ylen_list = load_arrs(save_path)
         self.x_list = torch.split(torch.from_numpy(x_list), xlen_list.tolist())
         self.y_list = torch.split(torch.from_numpy(y_list), ylen_list.tolist())
-        self.xlen_list = torch.from_numpy(xlen_list)
-        self.ylen_list = torch.from_numpy(ylen_list)
 
     def __len__(self):
         return len(self.x_list)
 
     def __getitem__(self, idx):
-        return self.x_list[idx], self.y_list[idx], self.xlen_list[idx], self.ylen_list[idx]
+        return self.x_list[idx], self.y_list[idx]
 
 
 def get_dataloader(save_path, batch_size, shuffle):
     FG = FeatureGenerator()
     dataset = NPZDataset(save_path=save_path)
     len_counts = np.zeros(FG.max_len + 1)
-    for _, _, xlen, _ in dataset:
-        len_counts[xlen] += 1
+    for x, _ in dataset:
+        len_counts[len(x)] += 1
 
     @functools.lru_cache(maxsize=None)
     def get_max_sizes(curr_len, chunks):
@@ -192,23 +185,19 @@ def get_dataloader(save_path, batch_size, shuffle):
     print('estimated mean padded sample len:', min_len_sum / len(dataset))
 
     def collate_fn(batch):
-        chunks = [([], [], [], []) for _ in range(len(max_sizes) + 1)]
-        for x, y, xlen, ylen in batch:
-            chunk_idx = np.searchsorted(max_sizes, xlen)
+        chunks = [([], []) for _ in range(len(max_sizes) + 1)]
+        for x, y in batch:
+            chunk_idx = np.searchsorted(max_sizes, len(x))
             chunks[chunk_idx][0].append(x)
             chunks[chunk_idx][1].append(y)
-            chunks[chunk_idx][2].append(xlen)
-            chunks[chunk_idx][3].append(ylen)
         padded_chunks = []
         for i in range(len(chunks)):
-            x, y, xlen, ylen = chunks[i]
+            x, y = chunks[i]
             if len(x) == 0:
                 continue
             x = pad_sequence(x, batch_first=True)
-            y = torch.cat(y)
-            xlen = torch.stack(xlen)
-            ylen = torch.stack(ylen)
-            padded_chunks.append((x, y, xlen, ylen))
+            y = pad_sequence(y, batch_first=True, padding_value=61)  # TODO try removing unique padding token
+            padded_chunks.append((x, y))
         return padded_chunks
 
     return DataLoader(dataset=dataset, batch_size=batch_size, collate_fn=collate_fn, shuffle=shuffle)

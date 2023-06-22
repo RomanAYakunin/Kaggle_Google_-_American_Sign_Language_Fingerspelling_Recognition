@@ -92,7 +92,7 @@ def phrases_to_labels(phrases):
         label = np.empty(len(phrase))
         for i, char in enumerate(phrase):
             label[i] = idx_dict[char]
-        labels.append(label + 1)
+        labels.append(label)
     return labels
 
 
@@ -104,18 +104,13 @@ def label_to_phrase(label):
         char_list[idx] = char
     phrase = ''
     for idx in label:
-        phrase += char_list[idx - 1]
+        phrase += char_list[idx]
     return phrase
-
-
-def proc_model_output(output):  # works with torch tensors
-    output = torch.unique_consecutive(output)
-    return output[output != 0]
 
 
 def accuracy_score(outputs, labels):  # works with torch tensors TODO see if there is more efficient edit dist impl
     len_sum, dist_sum = 0, 0
     for output, label in zip(outputs, labels):
         len_sum += len(label)
-        dist_sum += editdistance.eval(proc_model_output(output).tolist(), label.tolist())
+        dist_sum += editdistance.eval(output.tolist(), label.tolist())
     return (len_sum - dist_sum) / len_sum

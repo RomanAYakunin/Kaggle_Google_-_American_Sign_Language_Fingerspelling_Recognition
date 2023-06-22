@@ -11,15 +11,15 @@ import numpy as np
 from utils import get_seq_ids, train_val_split
 
 # train_seq_ids, val_seq_ids = train_val_split()
-# NPZDataset.create(train_seq_ids, 'proc_data/train.npz', crop_labels=True)
-# NPZDataset.create(val_seq_ids, 'proc_data/val.npz', crop_labels=False)
+# NPZDataset.create(train_seq_ids, 'proc_data/train.npz')
+# NPZDataset.create(val_seq_ids, 'proc_data/val.npz')
 
 batch_size = 64
 model = Model().cuda()  # TODO verify all steps in SlidingATTN
 FG = FeatureGenerator()
-summary(model, input_size=(2, FG.max_len, FG.num_points, FG.num_axes))
+summary(model, input_size=[(2, 170, FG.num_points, FG.num_axes), (2, 20)], dtypes=[torch.float32, torch.long])
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)  # TODO restart with proper lr
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)
 
 train_dataloader = get_dataloader(save_path='proc_data/train.npz', batch_size=batch_size, shuffle=True)
 val_dataloader = get_dataloader(save_path='proc_data/val.npz', batch_size=batch_size, shuffle=False)
