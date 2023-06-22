@@ -105,6 +105,10 @@ class Decoder(nn.Module):
         causal_mask = torch.triu(torch.full((tokens.shape[1], tokens.shape[1]),
                                             fill_value=-torch.inf, dtype=enc_out.dtype, device=enc_out.device),
                                  diagonal=1).unsqueeze(0).unsqueeze(1)  # [1, 1, Lp, Lp]
+        pad_mask = torch.where(pad_mask,
+                               torch.full_like(pad_mask, fill_value=-torch.inf,
+                                               dtype=enc_out.dtype, device=enc_out.device),
+                               torch.zeros_like(pad_mask, dtype=enc_out.dtype, device=enc_out.device))
         pad_mask = pad_mask.unsqueeze(1).unsqueeze(2)  # [N, 1, 1, Lx]
         for i, layer in enumerate(self.layers):
             k, v = enc_out[..., i, 0], enc_out[..., i, 1]

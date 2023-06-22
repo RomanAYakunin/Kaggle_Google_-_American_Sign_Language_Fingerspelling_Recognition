@@ -30,7 +30,8 @@ class Model(nn.Module):
         enc_out = self.enc(x, pad_mask)
         tokens = torch.full((x.shape[0], self.max_dec_len), fill_value=61, dtype=torch.long, device=x.device)
         tokens[:, 0] = 60
-        for i in range(self.max_dec_len - 1):  # TODO can shorten for loop
+        tokens[:, -1] = 59
+        for i in range(self.max_dec_len - 2):  # TODO can shorten for loop
             dec_out = self.dec(enc_out, tokens, pad_mask)
             tokens[:, i + 1] = torch.argmax(dec_out[:, i], dim=-1)
         return tokens[:, 1:]
