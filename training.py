@@ -52,7 +52,7 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
                         for x, y in val_batch:
                             x, y = x.cuda(), y.cuda()
                             model_outputs = model.infer(x)
-                            for output in model_outputs:  # TODO move this part to utils so it can be reused
+                            for output in model_outputs:
                                 outputs.append(output[:torch.argwhere(output == 59).ravel()[0]])
                             for label in y:
                                 labels.append(label[1:torch.argwhere(label == 59).ravel()[0]])

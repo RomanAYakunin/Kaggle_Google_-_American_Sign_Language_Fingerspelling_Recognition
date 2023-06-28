@@ -6,7 +6,7 @@ from training import train
 from sklearn.utils import shuffle
 from torchinfo import summary
 from dataset import FeatureGenerator, NPZDataset, get_dataloader
-from utils import load_arrs, save_arrs, get_paths, train_val_split, proc_model_output
+from utils import load_arrs, save_arrs, get_paths, train_val_split
 import numpy as np
 from utils import get_seq_ids, train_val_split, get_phrases, label_to_phrase
 from dataset import get_seqs
@@ -20,9 +20,10 @@ model = Model().cuda()
 model.load_state_dict(torch.load('saved_models/test_model.pt'))
 model.eval()
 
-with torch.no_grad():
-    output = torch.argmax(model(torch.from_numpy(seq).unsqueeze(0).cuda()).squeeze(0), dim=-1)
-    model_phrase = label_to_phrase(proc_model_output(output))
+with torch.no_grad(), torch.autocast(device_type='cuda', dtype=torch.float16):
+    output = model.infer(torch.from_numpy(seq).unsqueeze(0).cuda()).squeeze(0)
+    output = output[:torch.argwhere(output == 59).ravel()[0]]
+    model_phrase = label_to_phrase(output)
 
 phrase = get_phrases([seq_id])[0]
 print(phrase)

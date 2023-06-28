@@ -47,6 +47,14 @@ class SelfAttention(nn.Module):
         q, k, v = qkv[..., 0], qkv[..., 1], F.elu(qkv[..., 2])
         return self.mha(q, k, v, mask) + x
 
+    def infer_step(self, x, mask, idx, kv_cache):  # x: [N, dim], idx: int, kv_cache: [N, L, dim, 2]
+        qkv = self.qkv_lin(x).reshape(x.shape[0], x.shape[1], 3)
+        q, k, v = qkv[..., 0], qkv[..., 1], F.elu(qkv[..., 2])
+        kv_cache[:, idx, :, 0] = k
+        kv_cache[:, idx, :, 1] = v
+        x = self.mha(q.unsqueeze(1), kv_cache[:, :idx + 1, :, 0], kv_cache[:, :idx + 1, :, 1], mask).squeeze(1) + x
+        return x, kv_cache
+
 
 class CrossAttention(nn.Module):
     def __init__(self, dim, num_heads):
@@ -90,18 +98,24 @@ class DecoderLayer(nn.Module):
         x = self.ff_net(x)
         return x
 
+    def infer_step(self, x, k, v, causal_mask, pad_mask, idx, kv_cache):  # TODO check if kv cache is updated in place
+        # kv_cache: [N, Lp, dim, 2]
+        x, kv_cache = self.self_attn.infer_step(x, causal_mask, idx, kv_cache)
+        x = self.cross_attn(x.unsqueeze(1), k, v, pad_mask).squeeze(1)
+        x = self.ff_net(x)
+        return x, kv_cache
+
 
 class Decoder(nn.Module):
-    def __init__(self, num_layers, dim, num_heads, max_len):
+    def __init__(self, num_layers, dim, num_heads):
         super(Decoder, self).__init__()  # TODO remove padding token
         self.embedding = nn.Embedding(num_embeddings=62, embedding_dim=dim)  # token 59 = stop, token 60 = start
-        self.pos_enc = PositionalEncoding(dim=dim, max_len=max_len)
         self.layers = nn.ModuleList([DecoderLayer(dim, num_heads) for _ in range(num_layers)])
         self.out_lin = nn.Linear(dim, 60)
 
-    def forward(self, enc_out, tokens, pad_mask):  # TODO consider using checkpoints
+    def forward(self, enc_out, tokens, token_pe, pad_mask):  # TODO consider using checkpoints
         # enc_out: [N, Lx, dim, num_layers, 2], tokens: [N, Lp], pad_mask: [N, Lx]
-        x = self.embedding(tokens) + self.pos_enc(tokens.shape[1])  # [N, Lp, dim]
+        x = self.embedding(tokens) + token_pe  # [N, Lp, dim]
         causal_mask = torch.triu(torch.full((tokens.shape[1], tokens.shape[1]),
                                             fill_value=-torch.inf, dtype=enc_out.dtype, device=enc_out.device),
                                  diagonal=1).unsqueeze(0).unsqueeze(1)  # [1, 1, Lp, Lp]
@@ -114,3 +128,18 @@ class Decoder(nn.Module):
             k, v = enc_out[..., i, 0], enc_out[..., i, 1]
             x = layer(x, k, v, causal_mask, pad_mask)
         return self.out_lin(x)  # [N, Lp, 60]
+
+    def infer_step(self, enc_out, tokens, token_pe, pad_mask, idx, kv_cache):
+        # enc_out: [N, Lx, dim, num_layers, 2], tokens: [N, Lp], pad_mask: [N, Lx], kv_cache: [N, Lp, dim, num_layers, 2]
+        x = self.embedding(tokens[:, idx]) + token_pe[:, idx]  # [N, dim]
+        causal_mask = torch.zeros((1, 1, 1, 1), dtype=x.dtype, device=x.device)
+        inf_pad_mask = torch.where(pad_mask,  # TODO move this to Model module
+                                   torch.full_like(pad_mask, fill_value=-torch.inf,
+                                                   dtype=enc_out.dtype, device=enc_out.device),
+                                   torch.zeros_like(pad_mask, dtype=enc_out.dtype, device=enc_out.device))
+        inf_pad_mask = inf_pad_mask.unsqueeze(1).unsqueeze(2)  # [N, 1, 1, Lx]
+        for i, layer in enumerate(self.layers):
+            k, v = enc_out[..., i, 0], enc_out[..., i, 1]
+            x, kv_cache[..., i, :] = layer.infer_step(x, k, v, causal_mask, inf_pad_mask, idx, kv_cache[..., i, :])
+        x = self.out_lin(x)
+        tokens[:, idx + 1] = torch.argmax(x, dim=-1)

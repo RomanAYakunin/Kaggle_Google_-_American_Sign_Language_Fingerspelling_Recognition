@@ -16,6 +16,7 @@ from utils import get_seq_ids, train_val_split
 
 batch_size = 64
 model = Model().cuda()  # TODO verify all steps in SlidingATTN
+# model.load_state_dict(torch.load('saved_models/test_model.pt'))
 FG = FeatureGenerator()
 summary(model, input_size=[(2, 170, FG.num_points, FG.num_axes), (2, 20)], dtypes=[torch.float32, torch.long])
 

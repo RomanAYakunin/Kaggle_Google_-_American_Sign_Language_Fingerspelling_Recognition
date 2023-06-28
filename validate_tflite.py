@@ -19,6 +19,7 @@ interpreter = tf.lite.Interpreter(tflite_model_path)
 prediction_fn = interpreter.get_signature_runner("serving_default")
 
 _, val_seq_ids = train_val_split()
+val_seq_ids = val_seq_ids[:5]
 seqs = get_seqs(val_seq_ids)
 labels = phrases_to_labels(get_phrases(val_seq_ids))
 

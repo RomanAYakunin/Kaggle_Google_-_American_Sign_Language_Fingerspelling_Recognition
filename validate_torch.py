@@ -13,6 +13,7 @@ from dataset import get_seqs
 from model import Model
 import torch
 from utils import label_to_phrase
+import polars as pl
 
 
 model_path = 'saved_models/test_model.pt'
@@ -24,7 +25,9 @@ model.load_state_dict(torch.load(model_path))
 model.eval()
 
 _, val_seq_ids = train_val_split()
-val_seq_ids = val_seq_ids[:100]
+# train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
+# val_seq_ids = val_seq_ids[np.isin(val_seq_ids, train_meta_ids)]
+val_seq_ids = val_seq_ids[:100]  # TODO filter out supp seqs
 seqs = get_seqs(val_seq_ids)
 labels = phrases_to_labels(get_phrases(val_seq_ids))
 
@@ -35,7 +38,7 @@ for i, (seq, label) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.
     seq = seq.astype(np.float32)
     time_start = time.time()
     with torch.no_grad():
-        # seq = np.concatenate([seq, np.zeros((300, seq.shape[1], seq.shape[2]), dtype=np.float32)])  # TODO remove
+        # seq = np.concatenate([seq, np.zeros((100, seq.shape[1], seq.shape[2]), dtype=np.float32)])  # TODO remove
         output = model.infer(torch.from_numpy(seq).unsqueeze(0)).squeeze(0)
         output = output[:torch.argwhere(output == 59).ravel()[0]]
     time_sum += time.time() - time_start
