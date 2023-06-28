@@ -12,10 +12,10 @@ from decoder import Decoder
 class Model(nn.Module):
     def __init__(self, use_checkpoints=True):
         super(Model, self).__init__()
-        self.num_dec_layers = 2
-        self.dec_dim = 256
-        self.num_dec_heads = 16
-        self.max_dec_len = 50
+        self.num_dec_layers = 3
+        self.dec_dim = 384
+        self.num_dec_heads = 32
+        self.max_dec_len = 45
         self.enc = Encoder(self.num_dec_layers, self.dec_dim, use_checkpoints)
         self.token_pos_enc = PositionalEncoding(dim=self.dec_dim, max_len=self.max_dec_len)
         self.dec = Decoder(self.num_dec_layers, self.dec_dim, self.num_dec_heads)
@@ -37,6 +37,8 @@ class Model(nn.Module):
         kv_cache = torch.zeros(x.shape[0], self.max_dec_len, self.dec_dim, self.num_dec_layers, 2,
                                dtype=x.dtype, device=x.device)
         for idx in range(self.max_dec_len - 2):
+            if torch.all(torch.any(tokens[:, :idx + 1] == 59, dim=1)):
+                break
             self.dec.infer_step(enc_out, tokens, token_pe, pad_mask, idx, kv_cache)
         return tokens[:, 1:]
 

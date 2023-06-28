@@ -24,18 +24,17 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
         for batch_i, batch in enumerate(pbar := tqdm(train_dataloader, file=sys.stdout)):
             pbar.set_description(f'epoch {epoch}/{epochs}')
             with torch.autocast(device_type='cuda', dtype=torch.float16):  # Check if dtype is needed TODO NOW!
-                loss = 0
-                batch_size = 0
+                losses = []
                 for x, y in batch:
                     len_sum += len(x) * x.shape[1]
                     num_samples += len(x)
-                    batch_size += len(x)
                     x, y, = x.cuda(), y.cuda()
-                    x = augment_batch(x)  # AUGMENTING !!!  # TODO add label smooth
-                    chunk_loss = F.cross_entropy(input=model(x, y)[:, :-1].transpose(1, 2), target=y[:, 1:],
-                                                 ignore_index=61)  # TODO try removing padding token
-                    loss += chunk_loss * len(x)  # TODO consider weighing different-length sequences equally in the loss
-                loss /= batch_size
+                    x = augment_batch(x)  # AUGMENTING !!!  # TODO try removing padding token
+                    loss = F.cross_entropy(input=model(x, y)[:, :-1].transpose(1, 2), target=y[:, 1:],
+                                           ignore_index=61, reduction='none')
+                    loss = loss.sum(dim=1) / (loss != 0).sum(dim=1)
+                    losses.append(loss)
+                loss = torch.cat(losses).mean()
             optimizer.zero_grad()
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)  # for correct mean loss tracking
