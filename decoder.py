@@ -109,7 +109,7 @@ class DecoderLayer(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, num_layers, dim, num_heads):
         super(Decoder, self).__init__()  # TODO remove padding token
-        self.embedding = nn.Embedding(num_embeddings=62, embedding_dim=dim)  # token 59 = stop, token 60 = start
+        self.embedding = nn.Embedding(num_embeddings=63, embedding_dim=dim)  # token 59 = stop, token 60 = start
         self.layers = nn.ModuleList([DecoderLayer(dim, num_heads) for _ in range(num_layers)])
         self.out_lin = nn.Linear(dim, 60)
 

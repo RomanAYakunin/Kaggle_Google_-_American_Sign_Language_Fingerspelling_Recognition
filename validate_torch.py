@@ -24,12 +24,15 @@ model = Model(use_checkpoints=False)
 model.load_state_dict(torch.load(model_path))
 model.eval()
 
+train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
+
 _, val_seq_ids = train_val_split()
-# train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
-# val_seq_ids = val_seq_ids[np.isin(val_seq_ids, train_meta_ids)]
 val_seq_ids = val_seq_ids[:100]  # TODO filter out supp seqs
+# val_seq_ids = val_seq_ids[np.isin(val_seq_ids, train_meta_ids)]
 seqs = get_seqs(val_seq_ids)
 labels = phrases_to_labels(get_phrases(val_seq_ids))
+sot = np.isin(val_seq_ids, train_meta_ids)
+sot = ['train' if sot_i else 'supp' for sot_i in sot]
 
 time_sum, len_sum, dist_sum = 0, 0, 0  # TODO test with torch model
 for i, (seq, label) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.stdout)):
@@ -39,7 +42,7 @@ for i, (seq, label) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.
     time_start = time.time()
     with torch.no_grad():
         # seq = np.concatenate([seq, np.zeros((100, seq.shape[1], seq.shape[2]), dtype=np.float32)])  # TODO remove
-        output = model.infer(torch.from_numpy(seq).unsqueeze(0)).squeeze(0)
+        output = model.infer(torch.from_numpy(seq).unsqueeze(0), sot=sot[i]).squeeze(0)
         output = output[:torch.argwhere(output == 59).ravel()[0]]
     time_sum += time.time() - time_start
     # print('\nphrase:', label_to_phrase(label.astype(np.int32)))

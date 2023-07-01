@@ -11,7 +11,7 @@ class AugmentBatch(nn.Module):
         self.FG = FeatureGenerator()
 
     @torch.no_grad()
-    def forward(self, x):  # x.shape = [N, num_frames, num_features]  # TODO keep making sure this actually works
+    def forward(self, x, y):  # x.shape = [N, num_frames, num_features]  # TODO keep making sure this actually works
         # TODO add perspective transform
         is_nan = (x == 0).to(x.dtype)
         x -= torch.sum((1 - is_nan) * x, dim=(1, 2), keepdim=True) / \
@@ -26,10 +26,11 @@ class AugmentBatch(nn.Module):
         x = self.rotate(x, max_angle=0.3)
         x = self.point_shift(x, max_shift=0.005)
         # x = self.frame_dropout(x, dropout=0.5)  # must do this last
+        noise_y = self.noise_labels(y, p=0.3)
 
         x[:, :, :, 1] /= y_correction
         x = (1 - is_nan) * x
-        return x
+        return x, noise_y
 
     def flip(self, x, is_nan):
         p = torch.randint(high=2, size=(x.shape[0],), dtype=torch.long, device=x.device)  # 0 = don't flip, 1 = flip
@@ -79,3 +80,9 @@ class AugmentBatch(nn.Module):
     def frame_dropout(self, x, dropout):
         x *= torch.rand(size=(x.shape[0], x.shape[1], 1, 1), device=x.device) > dropout
         return x
+
+    def noise_labels(self, y, p):
+        noise_arr = torch.randint(high=59, size=y.shape, device=y.device)
+        noise_arr = torch.where(y < 59, noise_arr, y)
+        noise_y = torch.where(torch.rand(y.shape, device=y.device) < p, noise_arr, y)
+        return noise_y

@@ -123,12 +123,15 @@ class NPZDataset(Dataset):
     def create(seq_ids, save_path):
         seqs = get_seqs(seq_ids)
         labels = phrases_to_labels(get_phrases(seq_ids))
+        train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
+        sot = np.isin(seq_ids, train_meta_ids)
+        sot = np.where(sot, 60, 61)
         x_list, y_list = [[], []]
         xlen_list, ylen_list = np.empty(len(seq_ids), dtype=np.int32), np.empty(len(seq_ids), dtype=np.int32)
         for i, (x, y) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.stdout)):
             pbar.set_description(f'creating npz dataset {save_path}')
             x, y = np.array(x), np.array(y, dtype=np.int64)
-            y = np.concatenate([np.array([60]), y, np.array([59])])  # adds start & end tokens
+            y = np.concatenate([sot[i: i + 1], y, np.array([59])])  # adds start & end tokens
             x_list.append(x)
             y_list.append(y)
             xlen_list[i] = len(x)
@@ -196,7 +199,7 @@ def get_dataloader(save_path, batch_size, shuffle):
             if len(x) == 0:
                 continue
             x = pad_sequence(x, batch_first=True)
-            y = pad_sequence(y, batch_first=True, padding_value=61)  # TODO try removing unique padding token
+            y = pad_sequence(y, batch_first=True, padding_value=62)  # TODO try removing unique padding token
             padded_chunks.append((x, y))
         return padded_chunks
 

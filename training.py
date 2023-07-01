@@ -29,9 +29,9 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
                     len_sum += len(x) * x.shape[1]
                     num_samples += len(x)
                     x, y, = x.cuda(), y.cuda()
-                    x = augment_batch(x)  # AUGMENTING !!!  # TODO try removing padding token
-                    loss = F.cross_entropy(input=model(x, y)[:, :-1].transpose(1, 2), target=y[:, 1:],
-                                           ignore_index=61, reduction='none')
+                    x, noise_y = augment_batch(x, y)  # AUGMENTING !!!  # TODO try removing padding token
+                    loss = F.cross_entropy(input=model(x, noise_y)[:, :-1].transpose(1, 2), target=y[:, 1:],
+                                           ignore_index=62, reduction='none')
                     loss = loss.sum(dim=1) / (loss != 0).sum(dim=1)
                     losses.append(loss)
                 loss = torch.cat(losses).mean()
@@ -50,7 +50,7 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
                     for val_batch in val_dataloader:
                         for x, y in val_batch:
                             x, y = x.cuda(), y.cuda()
-                            model_outputs = model.infer(x)
+                            model_outputs = model.infer(x, sot=y[:, 0])
                             for output in model_outputs:
                                 outputs.append(output[:torch.argwhere(output == 59).ravel()[0]])
                             for label in y:

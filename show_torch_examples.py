@@ -2,6 +2,7 @@ import os
 import torch
 from torch.utils.data import TensorDataset
 from model import Model
+import polars as pl
 from training import train
 from sklearn.utils import shuffle
 from torchinfo import summary
@@ -13,6 +14,8 @@ from dataset import get_seqs
 import editdistance
 
 _, val_seq_ids = train_val_split()
+train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
+val_seq_ids = val_seq_ids[~np.isin(val_seq_ids, train_meta_ids)]
 seq_id = shuffle(val_seq_ids)[0]
 seq = get_seqs([seq_id])[0]
 
