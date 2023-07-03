@@ -5,8 +5,8 @@ from dataset import FeatureGenerator
 import torch.nn.functional as F
 from copy import deepcopy
 from torch.utils.checkpoint import checkpoint
-from encoder import PositionalEncoding, Encoder
-from decoder import Decoder
+from torch_model.encoder import PositionalEncoding, Encoder
+from torch_model.decoder import Decoder
 
 
 class Model(nn.Module):
@@ -18,7 +18,7 @@ class Model(nn.Module):
         self.max_dec_len = 45
         self.enc = Encoder(self.num_dec_layers, self.dec_dim, use_checkpoints)
         self.token_pos_enc = PositionalEncoding(dim=self.dec_dim, max_len=self.max_dec_len)
-        self.dec = Decoder(self.num_dec_layers, self.dec_dim, self.num_dec_heads)
+        self.dec = Decoder(self.num_dec_layers, self.dec_dim, self.num_dec_heads, use_checkpoints)
 
     def forward(self, x, tokens):
         pad_mask = torch.all(torch.all(x == 0, dim=3), dim=2)  # [N, L]
@@ -43,7 +43,7 @@ class Model(nn.Module):
         for idx in range(self.max_dec_len - 2):
             if torch.all(torch.any(tokens[:, :idx + 1] == 59, dim=1)):
                 break
-            self.dec.infer_step(enc_out, tokens, token_pe, pad_mask, idx, kv_cache)
+            self.dec.infer_step(enc_out, tokens, token_pe, pad_mask, kv_cache, idx)
         return tokens[:, 1:]
 
     def slow_infer(self, x, sot):

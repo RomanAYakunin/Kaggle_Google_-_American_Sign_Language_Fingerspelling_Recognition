@@ -29,6 +29,7 @@ tensorflow = "==2.8.0"
 tensorflow-probability = "==0.16.0"
 tensorflow-addons = "==0.16.1"
 editdistance = "*"
+protobuf = "==3.20.3"
 
 [dev-packages]
 

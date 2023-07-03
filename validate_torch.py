@@ -1,18 +1,13 @@
 import os
-import json
 import numpy as np
-import pandas as pd
-import tensorflow as tf
-from utils import get_seq_ids, train_val_split, get_phrases, phrases_to_labels
-from sklearn.utils import shuffle
+from utils import train_val_split, get_phrases, phrases_to_labels
 from tqdm import tqdm
 import sys
 import editdistance
 import time
 from dataset import get_seqs
-from model import Model
+from torch_model.model import Model
 import torch
-from utils import label_to_phrase
 import polars as pl
 
 
@@ -27,8 +22,8 @@ model.eval()
 train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
 
 _, val_seq_ids = train_val_split()
-val_seq_ids = val_seq_ids[:100]  # TODO filter out supp seqs
-# val_seq_ids = val_seq_ids[np.isin(val_seq_ids, train_meta_ids)]
+# val_seq_ids = val_seq_ids[:100]  # TODO filter out supp seqs
+val_seq_ids = val_seq_ids[np.isin(val_seq_ids, train_meta_ids)]
 seqs = get_seqs(val_seq_ids)
 labels = phrases_to_labels(get_phrases(val_seq_ids))
 sot = np.isin(val_seq_ids, train_meta_ids)

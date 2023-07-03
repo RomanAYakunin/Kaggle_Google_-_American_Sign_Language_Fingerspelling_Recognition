@@ -1,14 +1,28 @@
+import sys
 import math
 import torch
 import torch.nn as nn
 from dataset import FeatureGenerator
 from copy import deepcopy
+from tqdm import tqdm
 
 
 class AugmentBatch(nn.Module):
-    def __init__(self):
+    def __init__(self, dataloader):
         super(AugmentBatch, self).__init__()
         self.FG = FeatureGenerator()
+        self.train_counts = torch.zeros(59, dtype=torch.float32)
+        self.supp_counts = torch.zeros(59, dtype=torch.float32)
+        for batch in (pbar := tqdm(dataloader, file=sys.stdout)):
+            pbar.set_description('collecting train/supp counts')
+            for _, chunk_y in batch:
+                y = chunk_y.clone().detach()
+                train_y = y[y[:, 0] == 60].flatten()
+                train_y = train_y[train_y < 59]
+                supp_y = y[y[:, 0] == 61].flatten()
+                supp_y = supp_y[supp_y < 59]
+                self.train_counts.put_(train_y, torch.ones(train_y.shape, dtype=torch.float32), accumulate=True)
+                self.supp_counts.put_(supp_y, torch.ones(supp_y.shape, dtype=torch.float32), accumulate=True)
 
     @torch.no_grad()
     def forward(self, x, y):  # x.shape = [N, num_frames, num_features]  # TODO keep making sure this actually works
@@ -26,7 +40,7 @@ class AugmentBatch(nn.Module):
         x = self.rotate(x, max_angle=0.3)
         x = self.point_shift(x, max_shift=0.005)
         # x = self.frame_dropout(x, dropout=0.5)  # must do this last
-        noise_y = self.noise_labels(y, p=0.3)
+        noise_y = self.noise_labels(y, p=0.3)  # TODO maybe change p back to 0.3
 
         x[:, :, :, 1] /= y_correction
         x = (1 - is_nan) * x
@@ -77,12 +91,16 @@ class AugmentBatch(nn.Module):
              max_shift
         return x  # TODO different noises for different body parts and axes? don't noise z-axis?
 
-    def frame_dropout(self, x, dropout):
-        x *= torch.rand(size=(x.shape[0], x.shape[1], 1, 1), device=x.device) > dropout
-        return x
+    # def frame_dropout(self, x, dropout):
+    #     x *= torch.rand(size=(x.shape[0], x.shape[1], 1, 1), device=x.device) > dropout
+    #     return x
 
     def noise_labels(self, y, p):
-        noise_arr = torch.randint(high=59, size=y.shape, device=y.device)
+        noise_train = torch.multinomial(self.train_counts, num_samples=y.numel(), replacement=True).reshape(y.shape)
+        noise_supp = torch.multinomial(self.supp_counts, num_samples=y.numel(), replacement=True).reshape(y.shape)
+        noise_arr = torch.where((y[:, 0] == 60).unsqueeze(1).repeat(1, y.shape[1]),
+                                noise_train.to(y.device),
+                                noise_supp.to(y.device))
         noise_arr = torch.where(y < 59, noise_arr, y)
         noise_y = torch.where(torch.rand(y.shape, device=y.device) < p, noise_arr, y)
         return noise_y

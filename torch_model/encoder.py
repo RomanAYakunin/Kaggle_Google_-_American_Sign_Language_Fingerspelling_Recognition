@@ -10,7 +10,6 @@ from torch.utils.checkpoint import checkpoint
 class PositionalEncoding(nn.Module):
     def __init__(self, dim, max_len):
         super().__init__()
-        self.d_model = dim
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, dim, 2) * (-math.log(10000) / dim))  # TODO try changing 10000
         self.register_buffer('position', position)
@@ -27,11 +26,10 @@ class PositionalEncoding(nn.Module):
 class SlidingATTN(nn.Module):
     def __init__(self, dim, num_heads, window_size, dilation, use_checkpoints=True):  # window_size must be odd
         super(SlidingATTN, self).__init__()
-        self.use_checkpoints = use_checkpoints
-        FG = FeatureGenerator()
         self.num_heads = num_heads
         self.window_size = window_size
         self.dilation = dilation
+        self.use_checkpoints = use_checkpoints
 
         self.attn_lin = nn.Linear(dim, num_heads)
         self.pos_net = nn.Sequential(
@@ -52,6 +50,7 @@ class SlidingATTN(nn.Module):
             nn.Dropout(0.5)
         )
 
+        FG = FeatureGenerator()
         indices_buffer = dilation * torch.arange(window_size).unsqueeze(0) + \
                          torch.arange(FG.max_len).unsqueeze(1)  # [max_len, window_size]
         indices_buffer -= dilation * (window_size // 2)
@@ -102,11 +101,14 @@ class SlidingATTN(nn.Module):
 class AxisLayerNorm(nn.Module):
     def __init__(self, num_points, num_axes, dim):
         super(AxisLayerNorm, self).__init__()
+        self.num_points = num_points
+        self.num_axes = num_axes
+        self.dim = dim
+
         self.gamma = nn.Parameter(torch.empty(1, 1, num_points, num_axes))
         self.beta = nn.Parameter(torch.empty(1, 1, num_points, num_axes))
         nn.init.xavier_uniform_(self.gamma)
         nn.init.xavier_uniform_(self.beta)
-        self.dim = dim
 
     def forward(self, x):  # [N, L, num_points, num_axes]
         weight = (x != 0).to(x.dtype)
@@ -127,7 +129,6 @@ class Encoder(nn.Module):
         self.num_points = FG.num_points
         self.num_axes = FG.num_axes
         self.norm_ranges = FG.norm_ranges
-        self.lh_range, self.rh_range = FG.norm_ranges[-2], FG.norm_ranges[-1]
 
         self.x_norm = AxisLayerNorm(self.num_points, self.num_axes, (1, 2))
         self.feature_norms = nn.ModuleList([AxisLayerNorm(end - start, self.num_axes, 2)

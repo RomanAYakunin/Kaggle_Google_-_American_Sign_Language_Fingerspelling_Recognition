@@ -16,7 +16,9 @@ from torch.nn.utils.rnn import pad_sequence
 from utils import get_meta, phrases_to_labels
 from copy import deepcopy
 import functools
+from pathlib import Path
 
+PROJECT_DIR = str(Path(__file__).parent)
 POINTS_PER_FRAME = 543
 
 
@@ -87,7 +89,7 @@ def get_seqs(seq_ids, filter_columns=True):
     columns = get_column_names(filter_columns)
     partial_paths = get_meta().filter(pl.col('sequence_id').is_in(seq_ids)).select('path')\
         .unique().collect().to_numpy().flatten().tolist()
-    paths = ['raw_data/' + path for path in partial_paths]
+    paths = [f'{PROJECT_DIR}/raw_data/' + path for path in partial_paths]
     file_seq_list = []
     file_seq_ids = []
     for path in (pbar := tqdm(paths, file=sys.stdout)):
@@ -123,7 +125,7 @@ class NPZDataset(Dataset):
     def create(seq_ids, save_path):
         seqs = get_seqs(seq_ids)
         labels = phrases_to_labels(get_phrases(seq_ids))
-        train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
+        train_meta_ids = pl.scan_csv(f'{PROJECT_DIR}/raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
         sot = np.isin(seq_ids, train_meta_ids)
         sot = np.where(sot, 60, 61)
         x_list, y_list = [[], []]

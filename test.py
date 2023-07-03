@@ -2,10 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import json
-import onnx
-from onnx_tf.backend import prepare
 import tensorflow as tf
-from model import Model
+from torch_model.model import Model
 from dataset import FeatureGenerator, get_column_names
 
 FG = FeatureGenerator()

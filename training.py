@@ -15,7 +15,7 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
     num_batches = len(train_dataloader)
     best_val_acc = 0
     scaler = GradScaler()
-    augment_batch = AugmentBatch().cuda()
+    augment_batch = AugmentBatch(train_dataloader).cuda()
     print_mssg = []
     for epoch in range(1, epochs + 1):
         loss_sum = 0

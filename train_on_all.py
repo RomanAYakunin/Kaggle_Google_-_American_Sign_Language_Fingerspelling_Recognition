@@ -1,14 +1,8 @@
-import os
 import torch
-from torch.utils.data import TensorDataset
-from model import Model
+from torch_model.model import Model
 from training import train
-from sklearn.utils import shuffle
 from torchinfo import summary
-from dataset import FeatureGenerator, NPZDataset, get_dataloader
-from utils import load_arrs, save_arrs, get_paths, train_val_split
-import numpy as np
-from utils import get_seq_ids, train_val_split
+from dataset import FeatureGenerator, get_dataloader
 
 # train_seq_ids = get_seq_ids()
 # NPZDataset.create(train_seq_ids, 'proc_data/all.npz', crop_labels=True)

@@ -10,8 +10,9 @@ from tqdm import tqdm
 from sklearn.utils import shuffle
 from sklearn.model_selection import GroupShuffleSplit
 import editdistance
+from pathlib import Path
 
-POINTS_PER_FRAME = 543
+PROJECT_DIR = str(Path(__file__).parent)
 
 
 def save_arrs(arrs, path, verbose=True):
@@ -35,8 +36,8 @@ def load_arrs(path, verbose=True):
 
 
 def get_meta():
-    train_meta = pl.scan_csv('raw_data/train.csv')
-    sup_meta = pl.scan_csv('raw_data/supplemental_metadata.csv')
+    train_meta = pl.scan_csv(f'{PROJECT_DIR}/raw_data/train.csv')
+    sup_meta = pl.scan_csv(f'{PROJECT_DIR}/raw_data/supplemental_metadata.csv')
     return pl.concat([train_meta, sup_meta])
 
 
@@ -72,7 +73,7 @@ def get_paths(seq_ids):
     paths = filtered_meta.select('path').collect().to_numpy().flatten()
     meta_seq_ids = filtered_meta.select('sequence_id').collect().to_numpy().flatten()
     paths[np.argsort(seq_ids, axis=0)] = paths[np.argsort(meta_seq_ids, axis=0)]
-    full_paths = ['raw_data/' + path for path in paths.tolist()]
+    full_paths = [f'{PROJECT_DIR}/raw_data/' + path for path in paths.tolist()]
     return full_paths
 
 
@@ -85,7 +86,7 @@ def get_phrases(seq_ids):
 
 
 def phrases_to_labels(phrases):
-    with open('raw_data/character_to_prediction_index.json') as file:
+    with open(f'{PROJECT_DIR}/raw_data/character_to_prediction_index.json') as file:
         idx_dict = json.load(file)
     labels = []
     for phrase in phrases:
@@ -97,7 +98,7 @@ def phrases_to_labels(phrases):
 
 
 def label_to_phrase(label):
-    with open('raw_data/character_to_prediction_index.json') as file:
+    with open(f'{PROJECT_DIR}/raw_data/character_to_prediction_index.json') as file:
         idx_dict = json.load(file)
     char_list = [' ' for _ in range(59)]
     for char, idx in idx_dict.items():

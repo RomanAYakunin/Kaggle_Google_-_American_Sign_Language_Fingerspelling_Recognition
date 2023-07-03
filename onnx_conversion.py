@@ -1,10 +1,9 @@
 import torch
-import torch.nn as nn
 import json
 import onnx
 from onnx_tf.backend import prepare
 import tensorflow as tf
-from model import Model
+from torch_model.model import Model
 from dataset import FeatureGenerator, get_column_names
 
 FG = FeatureGenerator()
@@ -193,10 +192,7 @@ tflite_model = converter.convert()
 with open(tflite_infer_model_path, 'wb') as file:
     file.write(tflite_model)
 
-import os
-import json
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 from utils import get_seq_ids, train_val_split, get_phrases, phrases_to_labels
 from sklearn.utils import shuffle
