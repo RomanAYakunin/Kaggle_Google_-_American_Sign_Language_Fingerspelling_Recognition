@@ -31,7 +31,7 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
                     x, y, = x.cuda(), y.cuda()
                     x, noise_y = augment_batch(x, y)  # AUGMENTING !!!  # TODO try removing padding token
                     loss = F.cross_entropy(input=model(x, noise_y)[:, :-1].transpose(1, 2), target=y[:, 1:],
-                                           ignore_index=62, reduction='none')
+                                           label_smoothing=label_smooth, ignore_index=62, reduction='none')
                     loss = loss.sum(dim=1) / (loss != 0).sum(dim=1)
                     losses.append(loss)
                 loss = torch.cat(losses).mean()

@@ -15,13 +15,13 @@ with open(f'submissions/inference_args.json', 'w') as file:
     json.dump(column_dict, file)
 
 torch_model_path = 'saved_models/test_model.pt'
-onnx_enc_path = 'onnx_conversion/enc.onnx'
-onnx_pos_enc_path = 'onnx_conversion/pos_enc.onnx'
-onnx_dec_path = 'onnx_conversion/dec.onnx'
-tf_enc_dir = 'onnx_conversion/tf_enc'
-tf_pos_enc_dir = 'onnx_conversion/tf_pos_enc'
-tf_dec_dir = 'onnx_conversion/tf_dec'
-tf_infer_model_dir = 'onnx_conversion/tf_infer_model'
+onnx_enc_path = 'conversion/enc.onnx'
+onnx_pos_enc_path = 'conversion/pos_enc.onnx'
+onnx_dec_path = 'conversion/dec.onnx'
+tf_enc_dir = 'conversion/tf_enc'
+tf_pos_enc_dir = 'conversion/tf_pos_enc'
+tf_dec_dir = 'conversion/tf_dec'
+tf_infer_model_dir = 'conversion/tf_infer_model'
 tflite_infer_model_path = 'submissions/model.tflite'
 
 model = Model(use_checkpoints=False)

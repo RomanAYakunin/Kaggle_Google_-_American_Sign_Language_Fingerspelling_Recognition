@@ -49,7 +49,7 @@ class AutoModule(tf.Module):
         super(AutoModule, self).__init__()
         if type(module) is nn.Sequential:
             tf_seq_modules = []
-            for seq_module in module:
+            for seq_module in module:  # TODO can try simplifying
                 if not (type(seq_module) is nn.Dropout):
                     tf_seq_modules.append(AutoModule(seq_module))
             self.tf_module = Sequential(tf_seq_modules)

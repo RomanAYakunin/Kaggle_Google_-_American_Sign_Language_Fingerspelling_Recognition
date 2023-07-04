@@ -90,7 +90,6 @@ class Decoder(tf.Module):
 
     def __call__(self, enc_out, tokens, token_pe, kv_cache, idx):
         # enc_out: [N, Lx, dim, num_layers, 2], tokens: [N, Lp], kv_cache: [N, Lp, dim, num_layers, 2]
-        # x = self.embedding[tokens[:, -1]] + token_pe[:, -1]  # [N, dim]
         x = tf.gather(self.embedding, tokens[:, idx], axis=0) + token_pe[:, idx]  # [N, dim]
         kv_cache_slices = []
         for i, layer in enumerate(self.layers):

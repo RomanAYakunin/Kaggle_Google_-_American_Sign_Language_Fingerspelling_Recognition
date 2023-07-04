@@ -11,9 +11,8 @@ from torch_model.model import Model
 PROJECT_DIR = str(Path(__file__).parents[1])
 
 torch_model_path = f'{PROJECT_DIR}/saved_models/test_model.pt'
-tf_infer_model_dir = f'{PROJECT_DIR}/onnx_conversion/tf_infer_model'
+tf_infer_model_dir = f'{PROJECT_DIR}/conversion/tf_infer_model'
 tflite_infer_model_path = f'{PROJECT_DIR}/submissions/model.tflite'
-
 
 FG = FeatureGenerator()
 columns = get_column_names().tolist()
