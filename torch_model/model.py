@@ -13,7 +13,7 @@ class Model(nn.Module):
     def __init__(self, use_checkpoints=True):
         super(Model, self).__init__()
         self.num_dec_layers = 3
-        self.dec_dim = 384
+        self.dec_dim = 448
         self.num_dec_heads = 32
         self.max_dec_len = 45
         self.enc = Encoder(self.num_dec_layers, self.dec_dim, use_checkpoints)

@@ -81,10 +81,6 @@ class FFNet(nn.Module):
             nn.Linear(dim, dim),
             nn.LayerNorm(dim),
             nn.ELU(),
-            nn.Dropout(0.5),
-            nn.Linear(dim, dim),
-            nn.LayerNorm(dim),
-            nn.ELU(),
             nn.Dropout(0.5)
         )
 

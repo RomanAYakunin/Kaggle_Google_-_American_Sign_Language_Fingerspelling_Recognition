@@ -139,11 +139,7 @@ class Encoder(nn.Module):
         self.num_heads = 128
 
         self.input_net = nn.Sequential(
-            nn.Linear(self.input_dim, 2 * self.dim),  # TODO try turning off bias
-            nn.LayerNorm(2 * self.dim),
-            nn.ELU(),
-            nn.Dropout(0.5),
-            nn.Linear(2 * self.dim, self.dim),
+            nn.Linear(self.input_dim, self.dim),
             nn.LayerNorm(self.dim),
             nn.ELU(),
             nn.Dropout(0.5)
@@ -153,7 +149,7 @@ class Encoder(nn.Module):
                                          use_checkpoints=use_checkpoints)
         self.sliding_attn_stack = nn.ModuleList([
             SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=3,
-                        use_checkpoints=use_checkpoints) for _ in range(5)
+                        use_checkpoints=use_checkpoints) for _ in range(6)
         ])
 
         self.num_dec_layers = num_dec_layers

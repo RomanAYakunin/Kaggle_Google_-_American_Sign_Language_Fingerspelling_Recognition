@@ -55,7 +55,7 @@ class InferenceModel(tf.Module):
             idx.get_shape()
         ]
         cond = lambda enc_out, tokens, token_pe, kv_cache, idx: \
-            tf.logical_and(tokens[0, -1] != 59, idx < self.max_dec_len)
+            tf.logical_and(tokens[0, -1] != 59, idx < self.max_dec_len - 2)
         loop_vars = tf.while_loop(cond, self.dec, loop_vars, shape_invariants=shape_invariants)
         tokens = loop_vars[1][0]
         tokens = tokens[1: tf.reshape(tf.where(tokens == 59), (-1,))[0]]
@@ -69,13 +69,14 @@ class InferenceModel(tf.Module):
 torch_model = Model()
 torch_model.load_state_dict(torch.load(torch_model_path))
 torch_model.eval()
+
 infer_model = InferenceModel(torch_model)
 tf.saved_model.save(infer_model, tf_infer_model_dir, signatures={'serving_default': infer_model.call})
+
 converter = tf.lite.TFLiteConverter.from_saved_model(tf_infer_model_dir)
 converter.optimizations = [tf.lite.Optimize.DEFAULT]  # TODO look at the experimental stuff you saw
 converter.target_spec.supported_types = [tf.float16]
 tflite_model = converter.convert()
-
 with open(tflite_infer_model_path, 'wb') as file:
     file.write(tflite_model)
 
