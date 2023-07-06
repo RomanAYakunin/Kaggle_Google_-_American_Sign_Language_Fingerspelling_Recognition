@@ -2,7 +2,7 @@ import torch
 from torch_model.model import Model
 from training import train
 from torchinfo import summary
-from dataset import FeatureGenerator, get_dataloader
+from dataset import FeatureGenerator, get_dataloader, NPZDataset
 
 # train_seq_ids, val_seq_ids = train_val_split()
 # NPZDataset.create(train_seq_ids, 'proc_data/train.npz')
