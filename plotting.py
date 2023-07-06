@@ -9,7 +9,7 @@ from dataset import FeatureGenerator, get_seqs
 import json
 from copy import deepcopy
 from utils import get_random_seq_ids, get_phrases
-from augmentation import AugmentBatch
+from augmentation import AugmentX
 
 
 def plot_sample(x, phrase, save_path):  # x.shape = [num_frames, num_features]
@@ -41,7 +41,7 @@ plot_sample(seq, phrase, save_path='plots/sample.gif')
 
 def augment(x):
     x = torch.from_numpy(x).unsqueeze(0).cuda()
-    x = AugmentBatch().cuda()(x)
+    x = AugmentX().cuda()(x)
     return x.squeeze().cpu().numpy()
 
 

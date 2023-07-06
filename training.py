@@ -6,16 +6,16 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from utils import accuracy_score
 from torch.cuda.amp import GradScaler
-from augmentation import AugmentBatch
+from augmentation import AugmentX, AugmentY
 from utils import label_to_phrase
 
 
-def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, scheduler=None,
+def train(model, train_dataloader, epochs, optimizer, scheduler=None,
           val_dataloader=None, eval_wait=1, save_path=None):  # TODO add augmentation
     num_batches = len(train_dataloader)
     best_val_acc = 0
     scaler = GradScaler()
-    augment_batch = AugmentBatch(train_dataloader).cuda()
+    augment_x, augment_y = AugmentX().cuda(), AugmentY(train_dataloader).cuda()
     print_mssg = []
     for epoch in range(1, epochs + 1):
         loss_sum = 0
@@ -29,9 +29,9 @@ def train(model, train_dataloader, epochs, optimizer, label_smooth=0.2, schedule
                     len_sum += len(x) * x.shape[1]
                     num_samples += len(x)
                     x, y, = x.cuda(), y.cuda()
-                    x, noise_y = augment_batch(x, y)  # AUGMENTING !!!  # TODO try removing padding token
+                    x, noise_y = augment_x(x), augment_y(y)  # AUGMENTING !!!  # TODO try removing padding token
                     loss = F.cross_entropy(input=model(x, noise_y)[:, :-1].transpose(1, 2), target=y[:, 1:],
-                                           label_smoothing=label_smooth, ignore_index=62, reduction='none')
+                                           label_smoothing=0.5, ignore_index=62, reduction='none')
                     loss = loss.sum(dim=1) / (loss != 0).sum(dim=1)
                     losses.append(loss)
                 loss = torch.cat(losses).mean()

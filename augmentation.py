@@ -7,25 +7,13 @@ from copy import deepcopy
 from tqdm import tqdm
 
 
-class AugmentBatch(nn.Module):
-    def __init__(self, dataloader):
-        super(AugmentBatch, self).__init__()
+class AugmentX(nn.Module):
+    def __init__(self):
+        super(AugmentX, self).__init__()
         self.FG = FeatureGenerator()
-        self.train_counts = torch.zeros(59, dtype=torch.float32)
-        self.supp_counts = torch.zeros(59, dtype=torch.float32)
-        for batch in (pbar := tqdm(dataloader, file=sys.stdout)):
-            pbar.set_description('collecting train/supp counts')
-            for _, chunk_y in batch:
-                y = chunk_y.clone().detach()
-                train_y = y[y[:, 0] == 60].flatten()
-                train_y = train_y[train_y < 59]
-                supp_y = y[y[:, 0] == 61].flatten()
-                supp_y = supp_y[supp_y < 59]
-                self.train_counts.put_(train_y, torch.ones(train_y.shape, dtype=torch.float32), accumulate=True)
-                self.supp_counts.put_(supp_y, torch.ones(supp_y.shape, dtype=torch.float32), accumulate=True)
 
     @torch.no_grad()
-    def forward(self, x, y):  # x.shape = [N, num_frames, num_features]  # TODO keep making sure this actually works
+    def forward(self, x):  # x.shape = [N, num_frames, num_features]  # TODO keep making sure this actually works
         # TODO add perspective transform
         is_nan = (x == 0).to(x.dtype)
         x -= torch.sum((1 - is_nan) * x, dim=(1, 2), keepdim=True) / \
@@ -40,11 +28,10 @@ class AugmentBatch(nn.Module):
         x = self.rotate(x, max_angle=0.3)
         x = self.point_shift(x, max_shift=0.005)
         # x = self.frame_dropout(x, dropout=0.5)  # must do this last
-        noise_y = self.noise_labels(y, p=0.3)  # TODO maybe change p back to 0.3
 
         x[:, :, :, 1] /= y_correction
         x = (1 - is_nan) * x
-        return x, noise_y
+        return x
 
     def flip(self, x, is_nan):
         p = torch.randint(high=2, size=(x.shape[0],), dtype=torch.long, device=x.device)  # 0 = don't flip, 1 = flip
@@ -94,6 +81,27 @@ class AugmentBatch(nn.Module):
     # def frame_dropout(self, x, dropout):
     #     x *= torch.rand(size=(x.shape[0], x.shape[1], 1, 1), device=x.device) > dropout
     #     return x
+
+
+class AugmentY(nn.Module):
+    def __init__(self, dataloader):
+        super(AugmentY, self).__init__()
+        self.train_counts = torch.zeros(59, dtype=torch.float32)
+        self.supp_counts = torch.zeros(59, dtype=torch.float32)
+        for batch in (pbar := tqdm(dataloader, file=sys.stdout)):
+            pbar.set_description('collecting train/supp counts')
+            for _, chunk_y in batch:
+                y = chunk_y.clone().detach()
+                train_y = y[y[:, 0] == 60].flatten()
+                train_y = train_y[train_y < 59]
+                supp_y = y[y[:, 0] == 61].flatten()
+                supp_y = supp_y[supp_y < 59]
+                self.train_counts.put_(train_y, torch.ones(train_y.shape, dtype=torch.float32), accumulate=True)
+                self.supp_counts.put_(supp_y, torch.ones(supp_y.shape, dtype=torch.float32), accumulate=True)
+
+    @torch.no_grad()
+    def forward(self, y):
+        return self.noise_labels(y, p=0.3)
 
     def noise_labels(self, y, p):
         noise_train = torch.multinomial(self.train_counts, num_samples=y.numel(), replacement=True).reshape(y.shape)
