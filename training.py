@@ -44,7 +44,9 @@ def train(model, train_dataloader, epochs, optimizer, scheduler=None,  # TODO ad
                     x, noise_y = augment_x(x), augment_y(y)  # AUGMENTING !!!  # TODO try removing padding token
                     loss = F.cross_entropy(input=model(x, noise_y)[:, :-1].transpose(1, 2), target=y[:, 1:],
                                            label_smoothing=0.2, ignore_index=62, reduction='none')
-                    losses.append(loss.sum(dim=1))  # TODO try not normalizing by len
+                    loss = loss.sum(dim=1) / (loss != 0).sum(dim=1) # TODO try not normalizing by len
+                    loss *= torch.where(y[:, 0] == 60, 2, 1)  # TODO experiment with train multiplier
+                    losses.append(loss)
                 loss = torch.cat(losses).mean()
             optimizer.zero_grad()
             scaler.scale(loss).backward()
