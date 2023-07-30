@@ -46,20 +46,20 @@ class Model(nn.Module):
             self.dec.infer_step(enc_out, tokens, token_pe, pad_mask, kv_cache, idx)
         return tokens[:, 1:]
 
-    def slow_infer(self, x, sot):
-        pad_mask = torch.all(torch.all(x == 0, dim=3), dim=2)  # [N, L]
-        enc_out = self.enc(x, pad_mask)
-        tokens = torch.full((x.shape[0], self.max_dec_len), fill_value=61, dtype=torch.long, device=x.device)
-        if sot == 'train':
-            sot = 60
-        if sot == 'supp':
-            sot = 61
-        tokens[:, 0] = sot
-        tokens[:, -1] = 59
-        token_pe = self.token_pos_enc(self.max_dec_len)
-        for idx in range(self.max_dec_len - 2):  # TODO can shorten for loop
-            if torch.all(torch.any(tokens[:, :idx + 1] == 59, dim=1)):
-                break
-            dec_out = self.dec(enc_out, tokens, token_pe, pad_mask)
-            tokens[:, idx + 1] = torch.argmax(dec_out[:, idx], dim=-1)
-        return tokens[:, 1:]
+    # def slow_infer(self, x, sot):
+    #     pad_mask = torch.all(torch.all(x == 0, dim=3), dim=2)  # [N, L]
+    #     enc_out = self.enc(x, pad_mask)
+    #     tokens = torch.full((x.shape[0], self.max_dec_len), fill_value=61, dtype=torch.long, device=x.device)
+    #     if sot == 'train':
+    #         sot = 60
+    #     if sot == 'supp':
+    #         sot = 61
+    #     tokens[:, 0] = sot
+    #     tokens[:, -1] = 59
+    #     token_pe = self.token_pos_enc(self.max_dec_len)
+    #     for idx in range(self.max_dec_len - 2):  # TODO can shorten for loop
+    #         if torch.all(torch.any(tokens[:, :idx + 1] == 59, dim=1)):
+    #             break
+    #         dec_out = self.dec(enc_out, tokens, token_pe, pad_mask)
+    #         tokens[:, idx + 1] = torch.argmax(dec_out[:, idx], dim=-1)
+    #     return tokens[:, 1:]

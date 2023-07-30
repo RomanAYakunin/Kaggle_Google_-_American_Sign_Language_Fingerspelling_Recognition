@@ -11,12 +11,14 @@ import torch
 import polars as pl
 
 
-model_path = 'saved_models/test_model.pt'
+model_path = 'saved_models/train_swa_model.pt'
 
 print(f'model size: {os.path.getsize(model_path) / 2**20} MB')  # TODO check if maybe 2^ is the problem
 
 model = Model(use_checkpoints=False)
+model = torch.optim.swa_utils.AveragedModel(model)
 model.load_state_dict(torch.load(model_path))
+model = model.module
 model.eval()
 
 train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
@@ -24,6 +26,7 @@ train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique(
 _, val_seq_ids = train_val_split()
 # val_seq_ids = val_seq_ids[:100]  # TODO filter out supp seqs
 val_seq_ids = val_seq_ids[np.isin(val_seq_ids, train_meta_ids)]
+# val_seq_ids = val_seq_ids[:10]  # TODO delete
 seqs = get_seqs(val_seq_ids)
 labels = phrases_to_labels(get_phrases(val_seq_ids))
 sot = np.isin(val_seq_ids, train_meta_ids)
@@ -35,7 +38,7 @@ for i, (seq, label) in enumerate(pbar := tqdm(list(zip(seqs, labels)), file=sys.
     len_sum += len(label)
     seq = seq.astype(np.float32)
     time_start = time.time()
-    with torch.no_grad():
+    with torch.inference_mode():
         # seq = np.concatenate([seq, np.zeros((100, seq.shape[1], seq.shape[2]), dtype=np.float32)])  # TODO remove
         output = model.infer(torch.from_numpy(seq).unsqueeze(0), sot=sot[i]).squeeze(0)
         output = output[:torch.argwhere(output == 59).ravel()[0]]

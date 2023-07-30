@@ -10,7 +10,7 @@ from torch_model.model import Model
 
 PROJECT_DIR = str(Path(__file__).parents[1])
 
-torch_model_path = f'{PROJECT_DIR}/saved_models/test_model.pt'
+torch_model_path = f'{PROJECT_DIR}/saved_models/train_swa_model.pt'
 tf_infer_model_dir = f'{PROJECT_DIR}/conversion/tf_infer_model'
 tflite_infer_model_path = f'{PROJECT_DIR}/submissions/model.tflite'
 
@@ -67,7 +67,9 @@ class InferenceModel(tf.Module):
 
 
 torch_model = Model()
+torch_model = torch.optim.swa_utils.AveragedModel(torch_model)
 torch_model.load_state_dict(torch.load(torch_model_path))
+torch_model = torch_model.module
 torch_model.eval()
 
 infer_model = InferenceModel(torch_model)
