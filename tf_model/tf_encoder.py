@@ -43,7 +43,7 @@ class SlidingATTN(tf.Module):
         out = self.checkpoint_fn(attn_exp, v, g_pool, pos_component)
         out = tf.reshape(out, (tf.shape(x)[0], tf.shape(x)[1], -1))  # [N, L, out_dim]
         out = self.out_lin(out)
-        return out + x
+        return out
 
     def checkpoint_fn(self, attn_exp, v, g_pool, pos_component):
         attn_win = self.extract_sliding_windows(attn_exp)  # [N, L, window_size, num_heads]
@@ -124,8 +124,8 @@ class Encoder(tf.Module):
         x = tf.reshape(x, (tf.shape(x)[0], tf.shape(x)[1], -1))
 
         input_net_out = self.input_net(x) + self.pos_enc(tf.shape(x)[1])
-        sliding_attn_out = self.sliding_attn1(input_net_out)
+        sliding_attn_out = input_net_out + self.sliding_attn1(input_net_out)
         for sliding_attn in self.sliding_attn_stack:
-            sliding_attn_out = sliding_attn(sliding_attn_out)
+            sliding_attn_out = sliding_attn_out + sliding_attn(sliding_attn_out)
         out = tf.reshape(self.out_lin(sliding_attn_out), (tf.shape(x)[0], -1, self.decoder_dim, self.num_dec_layers, 2))
         return out

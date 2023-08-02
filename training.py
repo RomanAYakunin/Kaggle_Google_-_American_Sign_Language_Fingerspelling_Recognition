@@ -50,8 +50,8 @@ def train(model, optimizer, train_dataloader, epochs, swa_epochs, warmdown_epoch
             with torch.autocast(device_type='cuda', dtype=torch.float16):  # Check if dtype is needed TODO NOW!
                 losses = []
                 for x, y in batch:
-                    len_sum += len(x) * x.shape[1]
-                    num_samples += len(x)
+                    len_sum += x.shape[0] * x.shape[1]
+                    num_samples += x.shape[0]
                     x, y, = x.cuda(), y.cuda()
                     x, noise_y = augment_x(x), augment_y(y)  # AUGMENTING !!!  # TODO try removing padding token
                     loss = F.cross_entropy(input=model(x, noise_y)[:, :-1].transpose(1, 2), target=y[:, 1:],
@@ -102,4 +102,4 @@ def train(model, optimizer, train_dataloader, epochs, swa_epochs, warmdown_epoch
                 swa_model = torch.optim.swa_utils.AveragedModel(model)
             else:
                 swa_model.update_parameters(model)
-            torch.save(swa_model.state_dict(), 'saved_models/train_swa_model.pt')
+            torch.save(swa_model.module.state_dict(), 'saved_models/train_swa_model.pt')

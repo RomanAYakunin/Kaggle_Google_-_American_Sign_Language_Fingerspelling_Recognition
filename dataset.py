@@ -182,7 +182,7 @@ def get_dataloader(save_path, batch_size, shuffle):
                 min_seq = seq
         return min_res, min_seq
 
-    num_chunks = 6
+    num_chunks = 8
     sys.setrecursionlimit(10000)
     min_len_sum, max_sizes = get_max_sizes(FG.max_len, num_chunks)
     max_sizes.pop()

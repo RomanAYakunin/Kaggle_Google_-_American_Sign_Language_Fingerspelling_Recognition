@@ -11,22 +11,20 @@ import torch
 import polars as pl
 
 
-model_path = 'saved_models/train_swa_model.pt'
+model_path = 'saved_models/train_best_model.pt'
 
 print(f'model size: {os.path.getsize(model_path) / 2**20} MB')  # TODO check if maybe 2^ is the problem
 
 model = Model(use_checkpoints=False)
-model = torch.optim.swa_utils.AveragedModel(model)
 model.load_state_dict(torch.load(model_path))
-model = model.module
 model.eval()
 
 train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
 
 _, val_seq_ids = train_val_split()
-# val_seq_ids = val_seq_ids[:100]  # TODO filter out supp seqs
+# val_seq_ids = val_seq_ids[:1000]  # TODO filter out supp seqs
 val_seq_ids = val_seq_ids[np.isin(val_seq_ids, train_meta_ids)]
-# val_seq_ids = val_seq_ids[:10]  # TODO delete
+# val_seq_ids = val_seq_ids[:1000]  # TODO delete
 seqs = get_seqs(val_seq_ids)
 labels = phrases_to_labels(get_phrases(val_seq_ids))
 sot = np.isin(val_seq_ids, train_meta_ids)

@@ -73,13 +73,13 @@ class SlidingATTN(nn.Module):
             out = self.checkpoint_fn(attn_exp, v, g_pool, pos_component)
         out = out.reshape(x.shape[0], x.shape[1], -1)  # [N, L, out_dim]
         out = self.out_lin(out)
-        return out + x
+        return out
 
     def checkpoint_fn(self, attn_exp, v, g_pool, pos_component):
         attn_win = self.extract_sliding_windows(attn_exp)  # [N, L, window_size, num_heads]
         attn_win = torch.cat([torch.ones(v.shape[0], v.shape[1], 1, self.num_heads, device=v.device), attn_win], dim=2)
         attn_win = attn_win * pos_component  # [N, L, window_size + 1, num_heads]
-        attn_win = attn_win / (torch.sum(attn_win, dim=2, keepdim=True) + 1e-5)
+        attn_win = attn_win / (torch.sum(attn_win, dim=2, keepdim=True) + 1e-5)  # TODO try + 1
         v = self.extract_sliding_windows(v)  # [N, L, window_size, out_dim]
         v = v.reshape(v.shape[0], v.shape[1], self.window_size, self.num_heads,
                       -1)  # [N, L, window_size, num_heads, head_dim]
@@ -173,9 +173,15 @@ class Encoder(nn.Module):
         x = torch.cat([normed_x, normed_features], dim=2).flatten(start_dim=2)
 
         input_net_out = self.input_net(x) + self.pos_enc(x.shape[1])
-        sliding_attn_out = self.sliding_attn1(input_net_out, mask)
+        sliding_attn_out = input_net_out + self.sliding_attn1(input_net_out, mask)
+        drop_path_prob = 0
         for sliding_attn in self.sliding_attn_stack:
-            sliding_attn_out = sliding_attn(sliding_attn_out, mask)
+            drop_path_prob += 0.25 / len(self.sliding_attn_stack)  # TODO try applying to dec as well
+            if self.training and torch.rand(1) > drop_path_prob:  # TODO rework tf impl
+                sliding_attn_out = sliding_attn_out + sliding_attn(sliding_attn_out, mask)
+            elif not self.training:
+                # sliding_attn_out = sliding_attn_out + (1 - drop_path_prob) * sliding_attn(sliding_attn_out, mask)
+                sliding_attn_out = sliding_attn_out + sliding_attn(sliding_attn_out, mask)
         out = self.out_lin(sliding_attn_out).reshape(x.shape[0], -1, self.decoder_dim, self.num_dec_layers, 2)
         return out
 
