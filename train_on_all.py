@@ -10,11 +10,14 @@ from utils import get_seq_ids
 
 batch_size = 64
 model = Model().cuda()
+# model.load_state_dict(torch.load('saved_models/train_last_model.pt'))
+model.eval()  # EVALING!
 FG = FeatureGenerator()
 summary(model, input_size=[(2, 170, FG.num_points, FG.num_axes), (2, 20)], dtypes=[torch.float32, torch.long])
+model.train()  # TRAINING!
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.1)
 
 train_dataloader = get_dataloader(save_path='proc_data/all.npz', batch_size=batch_size, shuffle=True)
 
-train(model, train_dataloader, epochs=1000, optimizer=optimizer, save_path='saved_models/test_model.pt')
+train(model, optimizer, train_dataloader, epochs=80, swa_epochs=20, warmdown_epochs=30, warmdown_factor=0.1)

@@ -8,7 +8,7 @@ import numpy as np
 import torch.nn as nn
 import polars as pl
 from torch.utils.data import Dataset, DataLoader
-from utils import get_paths, get_phrases
+from utils import get_paths, get_phrases, get_gislr_paths, get_signs
 from utils import save_arrs, load_arrs
 from tqdm import tqdm
 from sklearn.utils import shuffle
@@ -63,7 +63,7 @@ class FeatureGenerator(nn.Module):
         ]
         point_arr = np.concatenate(point_arr)
         reflect_arr = np.concatenate(reflect_arr)
-        idx_map = np.zeros(POINTS_PER_FRAME)
+        idx_map = np.zeros(POINTS_PER_FRAME, dtype=np.int32)
         idx_map[point_arr] = np.arange(len(point_arr))
         reflect_arr = idx_map[reflect_arr]
         point_arr = torch.Tensor(point_arr).type(torch.int32)
@@ -73,7 +73,72 @@ class FeatureGenerator(nn.Module):
         self.num_points = len(self.point_arr)
         self.num_axes = 2
         self.max_len = 800
-        self.nan_value = 0
+        self.aug_max_len = round(1.5 * 800) + 1
+
+        parent_arr = np.full(self.num_points, fill_value=-1)
+
+        parent_arr[idx_map[feature_dict['right_hand']]] = idx_map[505]  # connected right hand to pose right hand base
+        parent_arr[idx_map[[507, 509, 511]]] = idx_map[505]  # connected pose right hand to pose right hand base
+        parent_arr[idx_map[505]] = idx_map[503]  # connected pose right hand to right elbow
+        parent_arr[idx_map[503]] = idx_map[501]  # connected right elbow to right shoulder
+
+        for child, parent in enumerate(parent_arr):
+            if parent != -1:
+                parent_arr[self.reflect_arr[child]] = self.reflect_arr[parent]
+
+        children = [[] for _ in range(self.num_points)]
+        for child, parent in enumerate(parent_arr):
+            if parent != -1:
+                children[parent].append(child)
+        passed = [False for _ in range(self.num_points)]
+        for point in range(self.num_points):
+            if not passed[point]:
+                self.propagate(point, children, passed)
+        anc_matrix = torch.eye(self.num_points, dtype=torch.float32)
+        for point in range(self.num_points):
+            for child in children[point]:
+                anc_matrix[child, point] = 1
+        self.register_buffer('anc_matrix', anc_matrix)
+
+        right_lines = [  # s, m format, only right side (their right)
+            idx_map[[501, 503]],  # shoulder, elbow
+            idx_map[[503, 505]]  # elbow, hand base
+        ]
+
+        lines = deepcopy(right_lines)
+        for s, m in right_lines:
+            lines.append([self.reflect_arr[s],
+                          self.reflect_arr[m]])
+        lines = torch.from_numpy(np.array(lines, dtype=np.longlong))  # [num_lines, 2]
+        self.register_buffer('lines', lines)
+
+        right_angle_levels = [  # s, c, m format, only right side (their right)
+            [
+                idx_map[[513, 501, 503]]  # hip, shoulder, elbow
+            ],
+            [
+                idx_map[[501, 503, 505]]  # shoulder, elbow, hand base
+            ]
+        ]
+
+        angle_levels = deepcopy(right_angle_levels)
+        for i in range(len(right_angle_levels)):
+            for s, c, m in right_angle_levels[i]:
+                angle_levels[i].append([self.reflect_arr[s],
+                                        self.reflect_arr[c],
+                                        self.reflect_arr[m]])
+        self.angle_levels = [torch.from_numpy(np.array(angles, dtype=np.longlong)).cuda() for angles in angle_levels]
+
+    @classmethod
+    def propagate(cls, point, children, passed):
+        if passed[point]:
+            return
+        passed[point] = True
+        point_children = deepcopy(children[point])
+        for child in point_children:
+            cls.propagate(child, children, passed)
+            for child_child in children[child]:
+                children[point].append(child_child)
 
 
 def get_column_names(filter_columns=True):
@@ -120,9 +185,33 @@ def get_seqs(seq_ids, filter_columns=True):
     return seq_list
 
 
+def get_gislr_data(paths):
+    signs = get_signs(paths)
+    with open('raw_data/gislr/sign_to_prediction_index_map.json') as file:
+        sign_to_pred_index_dict = json.load(file)
+    FG = FeatureGenerator()
+    data_columns = ['x', 'y'] if FG.num_axes == 2 else ['x', 'y', 'z']
+    x_list, y_list, = [[], []]
+    xlen_list = np.empty(len(paths), dtype=np.int32)
+    ylen_list = np.full(shape=len(paths), fill_value=2, dtype=np.int32)
+    for i, (path, sign) in enumerate(pbar := tqdm(list(zip(paths, signs)), file=sys.stdout)):
+        pbar.set_description(f'getting gislr data')
+        x = pl.read_parquet('raw_data/gislr/' + path, columns=data_columns).to_numpy() \
+            .reshape((-1, 543, len(data_columns))).astype(np.float16)[:, FG.point_arr]
+        x = np.where(np.isnan(x), np.zeros_like(x), x)  # zeroing out nan
+        y = np.concatenate([np.array([62]),
+                            np.array([62 + sign_to_pred_index_dict[sign]])], dtype=np.int64)
+        x_list.append(x)
+        y_list.append(y)
+        xlen_list[i] = (len(x))
+    x_list = np.concatenate(x_list)
+    y_list = np.concatenate(y_list)
+    return x_list, y_list, xlen_list, ylen_list
+
+
 class NPZDataset(Dataset):
     @staticmethod
-    def create(seq_ids, save_path):
+    def create(seq_ids, save_path, gislr_paths=None):
         seqs = get_seqs(seq_ids)
         labels = phrases_to_labels(get_phrases(seq_ids))
         train_meta_ids = pl.scan_csv(f'{PROJECT_DIR}/raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
@@ -140,6 +229,12 @@ class NPZDataset(Dataset):
             ylen_list[i] = len(y)
         x_list = np.concatenate(x_list)
         y_list = np.concatenate(y_list)
+        if gislr_paths is not None:
+            gislr_x, gislr_y, gislr_xlen, gislr_ylen = get_gislr_data(gislr_paths)
+            x_list = np.concatenate([x_list, gislr_x])
+            y_list = np.concatenate([y_list, gislr_y])
+            xlen_list = np.concatenate([xlen_list, gislr_xlen])
+            ylen_list = np.concatenate([ylen_list, gislr_ylen])
         save_arrs([x_list, y_list, xlen_list, ylen_list], save_path)
 
     def __init__(self, save_path):
@@ -182,7 +277,7 @@ def get_dataloader(save_path, batch_size, shuffle):
                 min_seq = seq
         return min_res, min_seq
 
-    num_chunks = 8
+    num_chunks = 4
     sys.setrecursionlimit(10000)
     min_len_sum, max_sizes = get_max_sizes(FG.max_len, num_chunks)
     max_sizes.pop()

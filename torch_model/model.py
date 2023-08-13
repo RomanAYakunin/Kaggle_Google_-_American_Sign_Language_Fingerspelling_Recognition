@@ -13,19 +13,20 @@ class Model(nn.Module):
     def __init__(self, use_checkpoints=True):
         super(Model, self).__init__()
         self.num_dec_layers = 3
-        self.dec_dim = 384
-        self.num_dec_heads = 32
+        self.dec_dim = 384  # 228 for 1/3
+        self.num_dec_heads = 32  # 19 for 1/3
         self.max_dec_len = 45
         self.enc = Encoder(self.num_dec_layers, self.dec_dim, use_checkpoints)
         self.token_pos_enc = PositionalEncoding(dim=self.dec_dim, max_len=self.max_dec_len)
         self.dec = Decoder(self.num_dec_layers, self.dec_dim, self.num_dec_heads, use_checkpoints)
 
     def forward(self, x, tokens):
+        is_gislr = tokens[:, 0] == 62
         pad_mask = torch.all(torch.all(x == 0, dim=3), dim=2)  # [N, L]
-        enc_out = self.enc(x, pad_mask)
+        enc_out, gislr_out = self.enc(x, pad_mask, is_gislr=is_gislr)
         token_pe = self.token_pos_enc(tokens.shape[1])
-        dec_out = self.dec(enc_out, tokens, token_pe, pad_mask)
-        return dec_out
+        dec_out = self.dec(enc_out, tokens[~is_gislr], token_pe, pad_mask[~is_gislr])
+        return dec_out, gislr_out
 
     def infer(self, x, sot):
         pad_mask = torch.all(torch.all(x == 0, dim=3), dim=2)  # [N, L]

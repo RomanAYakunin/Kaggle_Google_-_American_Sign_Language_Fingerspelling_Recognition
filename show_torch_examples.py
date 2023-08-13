@@ -14,7 +14,7 @@ seq_id = shuffle(val_seq_ids)[0]
 seq = get_seqs([seq_id])[0]
 
 model = Model().cuda()
-model.load_state_dict(torch.load('saved_models/test_model.pt'))
+model.load_state_dict(torch.load('saved_models/train_best_model.pt'))
 model.eval()
 
 with torch.no_grad(), torch.autocast(device_type='cuda', dtype=torch.float16):

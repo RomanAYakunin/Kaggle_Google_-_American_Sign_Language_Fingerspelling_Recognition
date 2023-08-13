@@ -30,6 +30,7 @@ tensorflow-probability = "==0.16.0"
 tensorflow-addons = "==0.16.1"
 editdistance = "*"
 protobuf = "==3.20.3"
+pytorch-optimizer = "*"
 
 [dev-packages]
 

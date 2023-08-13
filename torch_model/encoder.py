@@ -9,7 +9,7 @@ from torch.utils.checkpoint import checkpoint
 
 class PositionalEncoding(nn.Module):
     def __init__(self, dim, max_len):
-        super().__init__()
+        super(PositionalEncoding, self).__init__()
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, dim, 2) * (-math.log(10000) / dim))  # TODO try changing 10000
         self.register_buffer('position', position)
@@ -21,6 +21,15 @@ class PositionalEncoding(nn.Module):
         pe_cos = torch.cos(angle_arr)
         pe = torch.stack([pe_sin, pe_cos], dim=2).reshape(1, x_len, -1)
         return pe
+
+
+class BatchNorm(nn.Module):
+    def __init__(self, dim):
+        super(BatchNorm, self).__init__()
+        self.bn = nn.BatchNorm1d(dim)
+
+    def forward(self, x):
+        return self.bn(x.transpose(1, 2)).transpose(1, 2)
 
 
 class SlidingATTN(nn.Module):
@@ -52,10 +61,10 @@ class SlidingATTN(nn.Module):
 
         FG = FeatureGenerator()
         indices_buffer = dilation * torch.arange(window_size).unsqueeze(0) + \
-                         torch.arange(FG.max_len).unsqueeze(1)  # [max_len, window_size]
+                         torch.arange(FG.aug_max_len).unsqueeze(1)  # [max_len, window_size]
         indices_buffer -= dilation * (window_size // 2)
         indices_buffer = torch.where(indices_buffer < 0,
-                                     torch.full_like(indices_buffer, fill_value=FG.max_len),
+                                     torch.full_like(indices_buffer, fill_value=FG.aug_max_len),
                                      indices_buffer)
         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
 
@@ -135,8 +144,8 @@ class Encoder(nn.Module):
                                             for start, end in self.norm_ranges])
 
         self.input_dim = 2 * self.num_points * self.num_axes
-        self.dim = 896
-        self.num_heads = 128
+        self.dim = 896  # 518 for 1/3
+        self.num_heads = 128  # 74 for 1/3
 
         self.input_net = nn.Sequential(
             nn.Linear(self.input_dim, 2 * self.dim),  # TODO try turning off bias
@@ -148,7 +157,7 @@ class Encoder(nn.Module):
             nn.ELU(),
             nn.Dropout(0.5)
         )
-        self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.max_len)
+        self.pos_enc = PositionalEncoding(dim=self.dim, max_len=FG.aug_max_len)
         self.sliding_attn1 = SlidingATTN(self.dim, num_heads=self.num_heads, window_size=5, dilation=1,
                                          use_checkpoints=use_checkpoints)
         self.sliding_attn_stack = nn.ModuleList([
@@ -166,7 +175,15 @@ class Encoder(nn.Module):
             nn.ELU()
         )
 
-    def forward(self, x, mask):  # x: [N, L, num_points, num_axes], mask: [N, L]
+        self.gislr_net = nn.Sequential(
+            nn.Linear(self.dim, 1000),
+            nn.LayerNorm(1000, 1000),
+            nn.ELU(),
+            nn.Dropout(),
+            nn.Linear(1000, 250)
+        )
+
+    def forward(self, x, mask, is_gislr=None):  # x: [N, L, num_points, num_axes], mask: [N, L]
         normed_x = self.x_norm(x)
         normed_features = torch.cat([self.feature_norms[i](x[:, :, start: end])  # TODO make use of symmetry?
                                      for i, (start, end) in enumerate(self.norm_ranges)], dim=2)
@@ -178,10 +195,18 @@ class Encoder(nn.Module):
         for sliding_attn in self.sliding_attn_stack:
             drop_path_prob += 0.25 / len(self.sliding_attn_stack)  # TODO try applying to dec as well
             if self.training and torch.rand(1) > drop_path_prob:  # TODO rework tf impl
+                # sliding_attn_out = sliding_attn_out + 1/(1 - drop_path_prob) * sliding_attn(sliding_attn_out, mask)
                 sliding_attn_out = sliding_attn_out + sliding_attn(sliding_attn_out, mask)
             elif not self.training:
-                # sliding_attn_out = sliding_attn_out + (1 - drop_path_prob) * sliding_attn(sliding_attn_out, mask)
                 sliding_attn_out = sliding_attn_out + sliding_attn(sliding_attn_out, mask)
+        if is_gislr is not None:
+            out = self.out_lin(sliding_attn_out[~is_gislr])\
+                .reshape(-1, x.shape[1], self.decoder_dim, self.num_dec_layers, 2)
+            sliding_attn_out = sliding_attn_out[is_gislr]
+            inv_mask = (~mask[is_gislr]).to(x.dtype).unsqueeze(2)
+            gislr_mean = torch.sum(sliding_attn_out * inv_mask, dim=1) / torch.sum(inv_mask, dim=1)
+            gislr_out = self.gislr_net(gislr_mean)
+            return out, gislr_out
         out = self.out_lin(sliding_attn_out).reshape(x.shape[0], -1, self.decoder_dim, self.num_dec_layers, 2)
         return out
 

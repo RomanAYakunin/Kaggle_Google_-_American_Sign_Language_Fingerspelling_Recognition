@@ -38,7 +38,7 @@ class InferenceModel(tf.Module):
         tf.TensorSpec(shape=[None, len(columns)], dtype=tf.float32, name='inputs')
     ])
     def call(self, x):
-        x = tf.where(tf.math.is_nan(x), tf.zeros_like(x), x)[:FG.max_len]
+        x = tf.where(tf.math.is_nan(x), tf.zeros_like(x), x)[:FG.aug_max_len]
         x = tf.transpose(tf.reshape(x, (1, -1, FG.num_axes, FG.num_points)), (0, 1, 3, 2))
 
         enc_out = self.enc(x)
