@@ -1,16 +1,15 @@
 import os
-import json
-import numpy as np
-import pandas as pd
-import tensorflow as tf
-from utils import get_seq_ids, train_val_split, get_phrases, phrases_to_labels
-from sklearn.utils import shuffle
-from tqdm import tqdm
 import sys
-import editdistance
 import time
-from dataset import get_seqs
+
+import editdistance
+import numpy as np
 import polars as pl
+import tensorflow as tf
+from tqdm import tqdm
+
+from dataset import get_seqs
+from utils import train_val_split, get_phrases, phrases_to_labels
 
 tflite_model_path = 'submissions/model.tflite'
 print(f'model size: {os.path.getsize(tflite_model_path) / 2**20} MB')  # TODO check if maybe 2^ is the problem

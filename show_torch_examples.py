@@ -1,11 +1,12 @@
-import torch
-from torch_model.model import Model
-import polars as pl
-from sklearn.utils import shuffle
-import numpy as np
-from utils import train_val_split, get_phrases, label_to_phrase
-from dataset import get_seqs
 import editdistance
+import numpy as np
+import polars as pl
+import torch
+from sklearn.utils import shuffle
+
+from dataset import get_seqs
+from torch_model.model import Model
+from utils import train_val_split, get_phrases, label_to_phrase
 
 _, val_seq_ids = train_val_split()
 train_meta_ids = pl.scan_csv('raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()

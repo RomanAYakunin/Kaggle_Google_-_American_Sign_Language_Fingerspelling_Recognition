@@ -1,10 +1,10 @@
 import math
+
 import torch
 import torch.nn as nn
-from dataset import FeatureGenerator
-import torch.nn.functional as F
-from copy import deepcopy
 from torch.utils.checkpoint import checkpoint
+
+from dataset import FeatureGenerator
 
 
 class PositionalEncoding(nn.Module):

@@ -1,5 +1,5 @@
-import numpy as np
 import tensorflow as tf
+
 from tf_modules import AutoModule
 
 

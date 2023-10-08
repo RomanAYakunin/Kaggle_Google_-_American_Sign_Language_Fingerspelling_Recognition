@@ -1,12 +1,13 @@
 import os
 import sys
-from tqdm import tqdm
-import polars as pl
-import numpy as np
-from utils import get_seq_ids, get_random_seq_ids, get_paths, get_phrases, get_part_ids
-from sklearn.utils import shuffle
+
 import matplotlib.pyplot as plt
+import numpy as np
+import polars as pl
+from tqdm import tqdm
+
 from dataset import get_seqs, FeatureGenerator
+from utils import get_seq_ids, get_random_seq_ids, get_paths, get_phrases, get_part_ids
 
 
 def check_sorted():

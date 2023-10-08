@@ -1,11 +1,12 @@
-import torch
 import json
 from pathlib import Path
-from torch_model.model import Model
-from dataset import FeatureGenerator, get_column_names
+
 import tensorflow as tf
-from tf_encoder import PositionalEncoding, Encoder
+import torch
+
+from dataset import FeatureGenerator, get_column_names
 from tf_decoder import Decoder
+from tf_encoder import PositionalEncoding, Encoder
 from torch_model.model import Model
 
 PROJECT_DIR = str(Path(__file__).parents[1])

@@ -1,6 +1,5 @@
-import torch
-import torch.nn as nn
 import tensorflow as tf
+import torch.nn as nn
 
 
 class Linear(tf.Module):

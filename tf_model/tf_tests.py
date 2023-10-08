@@ -1,16 +1,17 @@
-import os
 import sys
 import time
+
+import numpy as np
 import tensorflow as tf
 import torch
-from torch_model.model import Model
-from tf_model.tf_modules import Linear, LayerNorm, ELU, AutoModule
-from tf_encoder import PositionalEncoding, SlidingATTN, AxisLayerNorm, Encoder
-from tf_decoder import MultiHeadAttention, Decoder
-import numpy as np
-from utils import train_val_split
-from dataset import get_seqs
 from tqdm import tqdm
+
+from dataset import get_seqs
+from tf_decoder import MultiHeadAttention, Decoder
+from tf_encoder import PositionalEncoding, SlidingATTN, AxisLayerNorm, Encoder
+from tf_model.tf_modules import Linear, LayerNorm, ELU, AutoModule
+from torch_model.model import Model
+from utils import train_val_split
 
 
 def compare_outputs(module, tf_module, inputs, eps=1e-5):

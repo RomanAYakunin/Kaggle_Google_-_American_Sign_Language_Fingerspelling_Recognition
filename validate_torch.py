@@ -1,15 +1,16 @@
 import os
-import numpy as np
-from utils import train_val_split, get_phrases, phrases_to_labels
-from tqdm import tqdm
 import sys
-import editdistance
 import time
+
+import editdistance
+import numpy as np
+import polars as pl
+import torch
+from tqdm import tqdm
+
 from dataset import get_seqs
 from torch_model.model import Model
-import torch
-import polars as pl
-
+from utils import train_val_split, get_phrases, phrases_to_labels
 
 model_path = 'saved_models/train_swa_model.pt'  # TODO test new model
 

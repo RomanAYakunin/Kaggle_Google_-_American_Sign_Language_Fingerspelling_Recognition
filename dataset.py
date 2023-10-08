@@ -1,22 +1,21 @@
-import os
-import shutil
 import sys
-import math
-import torch
-import json
+import functools
+import sys
+from copy import deepcopy
+from pathlib import Path
+
 import numpy as np
-import torch.nn as nn
 import polars as pl
-from torch.utils.data import Dataset, DataLoader
-from utils import get_paths, get_phrases, get_gislr_paths, get_signs
-from utils import save_arrs, load_arrs
-from tqdm import tqdm
+import torch
+import torch.nn as nn
 from sklearn.utils import shuffle
 from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
+
 from utils import get_meta, phrases_to_labels
-from copy import deepcopy
-import functools
-from pathlib import Path
+from utils import get_phrases
+from utils import save_arrs, load_arrs
 
 PROJECT_DIR = str(Path(__file__).parent)
 POINTS_PER_FRAME = 543

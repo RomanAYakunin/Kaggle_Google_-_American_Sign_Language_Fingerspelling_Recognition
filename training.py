@@ -1,14 +1,13 @@
 import sys
-import numpy as np
+
+import editdistance
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from tqdm import tqdm
 from torch.cuda.amp import GradScaler
+from tqdm import tqdm
+
 from augmentation import AugmentX, AugmentY
 from utils import label_to_phrase
-import editdistance
-from copy import deepcopy
 
 
 def get_accuracy_scores(outputs, labels):  # works with torch tensors

@@ -1,11 +1,12 @@
-import sys
 import math
+import sys
+
 import torch
 import torch.nn as nn
-from dataset import FeatureGenerator
-from copy import deepcopy
-from tqdm import tqdm
 import torch.nn.functional as F
+from tqdm import tqdm
+
+from dataset import FeatureGenerator
 
 
 class AugmentX(nn.Module):

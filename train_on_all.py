@@ -1,9 +1,9 @@
 import torch
+from torchinfo import summary
+
+from dataset import FeatureGenerator, get_dataloader
 from torch_model.model import Model
 from training import train
-from torchinfo import summary
-from dataset import FeatureGenerator, get_dataloader, NPZDataset
-from utils import get_seq_ids
 
 # train_seq_ids = get_seq_ids()
 # NPZDataset.create(train_seq_ids, 'proc_data/all.npz')
