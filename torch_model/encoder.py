@@ -144,8 +144,8 @@ class Encoder(nn.Module):
                                             for start, end in self.norm_ranges])
 
         self.input_dim = 2 * self.num_points * self.num_axes
-        self.dim = 896  # 518 for 1/3
-        self.num_heads = 128  # 74 for 1/3
+        self.dim = 924
+        self.num_heads = 132
 
         self.input_net = nn.Sequential(
             nn.Linear(self.input_dim, 2 * self.dim),  # TODO try turning off bias
@@ -175,15 +175,7 @@ class Encoder(nn.Module):
             nn.ELU()
         )
 
-        self.gislr_net = nn.Sequential(
-            nn.Linear(self.dim, 1000),
-            nn.LayerNorm(1000, 1000),
-            nn.ELU(),
-            nn.Dropout(),
-            nn.Linear(1000, 250)
-        )
-
-    def forward(self, x, mask, is_gislr=None):  # x: [N, L, num_points, num_axes], mask: [N, L]
+    def forward(self, x, mask):  # x: [N, L, num_points, num_axes], mask: [N, L]
         normed_x = self.x_norm(x)
         normed_features = torch.cat([self.feature_norms[i](x[:, :, start: end])  # TODO make use of symmetry?
                                      for i, (start, end) in enumerate(self.norm_ranges)], dim=2)
@@ -191,64 +183,13 @@ class Encoder(nn.Module):
 
         input_net_out = self.input_net(x) + self.pos_enc(x.shape[1])
         sliding_attn_out = input_net_out + self.sliding_attn1(input_net_out, mask)
-        drop_path_prob = 0
+        drop_path_prob = 0.2
         for sliding_attn in self.sliding_attn_stack:
-            drop_path_prob += 0.25 / len(self.sliding_attn_stack)  # TODO try applying to dec as well
+            # drop_path_prob += 0.25 / len(self.sliding_attn_stack)  # TODO try applying to dec as well
             if self.training and torch.rand(1) > drop_path_prob:  # TODO rework tf impl
                 # sliding_attn_out = sliding_attn_out + 1/(1 - drop_path_prob) * sliding_attn(sliding_attn_out, mask)
                 sliding_attn_out = sliding_attn_out + sliding_attn(sliding_attn_out, mask)
             elif not self.training:
                 sliding_attn_out = sliding_attn_out + sliding_attn(sliding_attn_out, mask)
-        if is_gislr is not None:
-            out = self.out_lin(sliding_attn_out[~is_gislr])\
-                .reshape(-1, x.shape[1], self.decoder_dim, self.num_dec_layers, 2)
-            sliding_attn_out = sliding_attn_out[is_gislr]
-            inv_mask = (~mask[is_gislr]).to(x.dtype).unsqueeze(2)
-            gislr_mean = torch.sum(sliding_attn_out * inv_mask, dim=1) / torch.sum(inv_mask, dim=1)
-            gislr_out = self.gislr_net(gislr_mean)
-            return out, gislr_out
         out = self.out_lin(sliding_attn_out).reshape(x.shape[0], -1, self.decoder_dim, self.num_dec_layers, 2)
         return out
-
-
-# class ConvBlock(nn.Module):
-#     def __init__(self, dim, window_size, dilation):  # window_size must be odd
-#         super(ConvBlock, self).__init__()
-#         FG = FeatureGenerator()
-#         self.window_size = window_size
-#         self.dilation = dilation
-#
-#         self.lin1 = nn.Sequential(
-#             nn.Linear(window_size * dim, dim),
-#             nn.LayerNorm(dim),
-#             nn.ELU()
-#         )
-#         self.lin2 = nn.Sequential(
-#             nn.Linear(dim, dim),
-#             nn.LayerNorm(dim),
-#             nn.ELU()
-#         )
-#
-#         indices_buffer = dilation * torch.arange(window_size).unsqueeze(0) + \
-#                          torch.arange(FG.max_len).unsqueeze(1)  # [max_len, window_size]
-#         indices_buffer -= dilation * (window_size // 2)
-#         indices_buffer = torch.where(indices_buffer < 0,
-#                                      torch.full_like(indices_buffer, fill_value=FG.max_len),
-#                                      indices_buffer)
-#         self.register_buffer('indices_buffer', indices_buffer)  # for extracting sliding windows
-#
-#     def forward(self, x, mask):  # x: [N, L, dim], mask: [N, L]  # TODO remove t
-#         inv_mask = (~mask).to(x.dtype).unsqueeze(2)
-#         x = x * inv_mask
-#         global_pool = torch.sum(x, dim=1, keepdim=True) / torch.sum(inv_mask, dim=1, keepdim=True)
-#         win_x = self._extract_sliding_windows(x).reshape(x.shape[0], x.shape[1], -1)
-#         out = self.lin2(self.lin1(win_x) + global_pool) + x
-#         return out
-#
-#     def _extract_sliding_windows(self, x):
-#         indices = self.indices_buffer[:x.shape[1]]
-#         indices = torch.minimum(indices, torch.full_like(indices, fill_value=x.shape[1]))
-#         x = torch.cat([x,
-#                        torch.zeros(x.shape[0], 1, x.shape[2], dtype=x.dtype, device=x.device)], dim=1)
-#         x = x[:, indices]
-#         return x

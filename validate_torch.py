@@ -11,7 +11,7 @@ import torch
 import polars as pl
 
 
-model_path = 'saved_models/train_best_model.pt'
+model_path = 'saved_models/train_swa_model.pt'  # TODO test new model
 
 print(f'model size: {os.path.getsize(model_path) / 2**20} MB')  # TODO check if maybe 2^ is the problem
 

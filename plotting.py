@@ -43,21 +43,10 @@ def plot_sample(x, phrase, save_path, center=False):  # x.shape = [num_frames, n
     anim.save(save_path, writer=PillowWriter(fps=30))
 
 
-# seq_id = get_random_seq_ids()[343]
-# seq = get_seqs([seq_id])[0]
-# phrase = get_phrases([seq_id])[0]
-#
-# plot_sample(seq, phrase, save_path='plots/sample.gif', center=True)
-#
-# plot_sample(augment(seq), phrase, save_path='plots/augmented.gif')
+seq_id = get_random_seq_ids()[343]
+seq = get_seqs([seq_id])[0]
+phrase = get_phrases([seq_id])[0]
 
-from utils import get_gislr_paths, get_signs
-from dataset import get_gislr_data
+plot_sample(seq, phrase, save_path='plots/sample.gif', center=True)
 
-path = shuffle(get_gislr_paths(), random_state=413)[2]
-seq = get_gislr_data([path])[0]
-phrase = get_signs([path])[0]
-
-plot_sample(seq, phrase, save_path='plots/gislr_sample.gif', center=True)
-
-plot_sample(augment(seq), phrase, save_path='plots/gislr_augmented.gif')
+plot_sample(augment(seq), phrase, save_path='plots/augmented.gif')

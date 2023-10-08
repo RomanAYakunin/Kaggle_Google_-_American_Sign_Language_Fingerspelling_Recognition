@@ -32,7 +32,7 @@ class MultiHeadAttention(nn.Module):
         else:
             out = self.checkpoint_fn(q, k, v, mask)
         out = out.permute(0, 2, 1, 3)  # [N, Lq, num_heads, head_dim]
-        out = out.reshape(out.shape[0], out.shape[1], out.shape[2] * out.shape[3])  # [N, Lq, model_dim]
+        out = out.reshape(out.shape[0], out.shape[1], -1)  # [N, Lq, model_dim]
         out = self.out_lin(out)
         return out
 
@@ -116,8 +116,7 @@ class DecoderLayer(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, num_layers, dim, num_heads, use_checkpoints=True):
         super(Decoder, self).__init__()  # TODO remove padding token
-        self.embedding = nn.Embedding(num_embeddings=63, embedding_dim=dim)
-        # token <59 = phrase, 59 = stop, 60 = train SOT, 61 = supp SOT, 62 = pad, 63 = gislr SOT, >63 = gislr sign
+        self.embedding = nn.Embedding(num_embeddings=63, embedding_dim=dim)  # token 59 = stop, token 60 = start
         self.layers = nn.ModuleList([DecoderLayer(dim, num_heads, use_checkpoints) for _ in range(num_layers)])
         self.out_lin = nn.Linear(dim, 60)
 

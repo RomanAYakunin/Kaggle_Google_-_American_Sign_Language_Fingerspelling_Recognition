@@ -84,7 +84,7 @@ class DecoderLayer(tf.Module):
 class Decoder(tf.Module):
     def __init__(self, module):
         super(Decoder, self).__init__()
-        self.embedding = tf.convert_to_tensor(module.embedding.weight[:61].detach().numpy(), dtype=tf.float32)
+        self.embedding = tf.convert_to_tensor(module.embedding.weight.detach().numpy(), dtype=tf.float32)
         self.layers = [DecoderLayer(decoder_layer) for decoder_layer in module.layers]
         self.out_lin = AutoModule(module.out_lin)
 

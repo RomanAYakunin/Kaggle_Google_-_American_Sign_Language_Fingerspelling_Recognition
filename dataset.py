@@ -185,33 +185,9 @@ def get_seqs(seq_ids, filter_columns=True):
     return seq_list
 
 
-def get_gislr_data(paths):
-    signs = get_signs(paths)
-    with open('raw_data/gislr/sign_to_prediction_index_map.json') as file:
-        sign_to_pred_index_dict = json.load(file)
-    FG = FeatureGenerator()
-    data_columns = ['x', 'y'] if FG.num_axes == 2 else ['x', 'y', 'z']
-    x_list, y_list, = [[], []]
-    xlen_list = np.empty(len(paths), dtype=np.int32)
-    ylen_list = np.full(shape=len(paths), fill_value=2, dtype=np.int32)
-    for i, (path, sign) in enumerate(pbar := tqdm(list(zip(paths, signs)), file=sys.stdout)):
-        pbar.set_description(f'getting gislr data')
-        x = pl.read_parquet('raw_data/gislr/' + path, columns=data_columns).to_numpy() \
-            .reshape((-1, 543, len(data_columns))).astype(np.float16)[:, FG.point_arr]
-        x = np.where(np.isnan(x), np.zeros_like(x), x)  # zeroing out nan
-        y = np.concatenate([np.array([62]),
-                            np.array([62 + sign_to_pred_index_dict[sign]])], dtype=np.int64)
-        x_list.append(x)
-        y_list.append(y)
-        xlen_list[i] = (len(x))
-    x_list = np.concatenate(x_list)
-    y_list = np.concatenate(y_list)
-    return x_list, y_list, xlen_list, ylen_list
-
-
 class NPZDataset(Dataset):
     @staticmethod
-    def create(seq_ids, save_path, gislr_paths=None):
+    def create(seq_ids, save_path):
         seqs = get_seqs(seq_ids)
         labels = phrases_to_labels(get_phrases(seq_ids))
         train_meta_ids = pl.scan_csv(f'{PROJECT_DIR}/raw_data/train.csv').select('sequence_id').unique().collect().to_numpy().flatten()
@@ -229,12 +205,6 @@ class NPZDataset(Dataset):
             ylen_list[i] = len(y)
         x_list = np.concatenate(x_list)
         y_list = np.concatenate(y_list)
-        if gislr_paths is not None:
-            gislr_x, gislr_y, gislr_xlen, gislr_ylen = get_gislr_data(gislr_paths)
-            x_list = np.concatenate([x_list, gislr_x])
-            y_list = np.concatenate([y_list, gislr_y])
-            xlen_list = np.concatenate([xlen_list, gislr_xlen])
-            ylen_list = np.concatenate([ylen_list, gislr_ylen])
         save_arrs([x_list, y_list, xlen_list, ylen_list], save_path)
 
     def __init__(self, save_path):

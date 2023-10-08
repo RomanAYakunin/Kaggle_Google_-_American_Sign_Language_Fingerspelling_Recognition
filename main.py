@@ -11,7 +11,7 @@ from ranger21 import Ranger21
 
 batch_size = 64
 model = Model().cuda()  # TODO use or not use checkpoints
-# model.load_state_dict(torch.load('saved_models/train_best_model.pt'))  # TODO change to base model if needed
+model.load_state_dict(torch.load('saved_models/train_best_model.pt'))  # TODO change to base model if needed
 model.eval()  # EVALING!
 FG = FeatureGenerator()
 summary(model, input_size=[(2, 170, FG.num_points, FG.num_axes), (2, 20)], dtypes=[torch.float32, torch.long])
@@ -25,12 +25,12 @@ model.train()  # TRAINING!
 train_dataloader = get_dataloader(save_path='proc_data/train.npz', batch_size=batch_size, shuffle=True)
 val_dataloader = get_dataloader(save_path='proc_data/val.npz', batch_size=batch_size, shuffle=False)
 
-EPOCHS = 80
-SWA_EPOCHS = 20
-WARMDOWN_EPOCHS = 20
-WARMDOWN_FACTOR = 0.1
+EPOCHS = 81
+SWA_EPOCHS = 80
+WARMDOWN_EPOCHS = 1
+WARMDOWN_FACTOR = 1
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.1)  # TODO try ranger21
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5, weight_decay=0.1)  # TODO try ranger21
 
 # optimizer = Ranger21(model.parameters(),
 #                      lr=1e-3, weight_decay=0.1,
