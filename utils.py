@@ -102,17 +102,3 @@ def label_to_phrase(label):
     for idx in label:
         phrase += char_list[idx]
     return phrase
-
-
-def get_gislr_paths():  # returns cropped paths, not full paths
-    return pl.scan_csv('raw_data/gislr/train.csv').select('path').collect().to_numpy().flatten().astype(str)
-
-
-def get_signs(paths):  # more efficient than getting signs one by one from polars LazyFrame
-    asdfas = 0
-    signs = pl.scan_csv('raw_data/gislr/train.csv').filter(pl.col('path').is_in(paths)).select('sign')\
-        .collect().to_numpy().flatten()
-    train_df_paths = pl.scan_csv('raw_data/gislr/train.csv').select('path').filter(pl.col('path').is_in(paths)) \
-        .collect().to_numpy().flatten()  # is in different order from cropped_paths
-    signs[np.argsort(paths)] = signs[np.argsort(train_df_paths)]  # matches via sort, then unsorts
-    return signs

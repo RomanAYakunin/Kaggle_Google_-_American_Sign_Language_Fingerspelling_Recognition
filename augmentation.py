@@ -15,7 +15,7 @@ class AugmentX(nn.Module):
         self.FG = FeatureGenerator()
 
     @torch.no_grad()  # TODO try inference mode approach
-    def forward(self, x):  # x.shape = [N, L, P, A]  # TODO keep making sure this actually works
+    def forward(self, x):
         # TODO add perspective transform
         x = x.to(torch.float32)
         is_nan = (x == 0).to(x.dtype)
@@ -205,6 +205,6 @@ class AugmentY(nn.Module):
         noise_arr = torch.where((y[:, 0] == 60).unsqueeze(1).repeat(1, y.shape[1]),
                                 noise_train.to(y.device),
                                 noise_supp.to(y.device))
-        noise_arr = torch.where(y < 59, noise_arr, y)  # preserves special tokens (SOT, EOT, gislr)
+        noise_arr = torch.where(y < 59, noise_arr, y)  # preserves special tokens (SOT, EOT)
         noise_y = torch.where(torch.rand(y.shape, device=y.device) < p, noise_arr, y)
         return noise_y

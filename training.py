@@ -41,7 +41,7 @@ def train(model, optimizer, train_dataloader, epochs, swa_epochs, warmdown_epoch
         if curr_epoch == epochs - swa_epochs + 1:
             print(f'warmdown complete')
             print(f'starting stochastic weight averaging (epoch {curr_epoch})')
-        loss_sum, reg_loss_sum, gislr_loss_sum = 0, 0, 0
+        loss_sum, reg_loss_sum = 0, 0
         len_sum = 0
         aug_len_sum = 0
         num_samples = 0
