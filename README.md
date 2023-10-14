@@ -1,5 +1,9 @@
 # Google - American Sign Language Fingerspelling Recognition Competition on Kaggle
 
+## Summary
+
+The code in this project was used to develop the models I submitted to Google's American Sign Laanguage Fingerspelling Recognition competition on Kaggle, which ranked in the top 4.71% of submissions, qualifying for a silver placement.
+
 ## Project Structure
 
 ### Code structure
@@ -17,7 +21,7 @@
  - validate_tflite.py: checks performance of TFLite model
  - validate_torch.py: checks performance of torch model
 
-### Data structure/Other
+### Data Structure / Other
 
  - conversion: directory used by tf_model module to store intermediate TensorFlow model prior
 to tflite conversion
