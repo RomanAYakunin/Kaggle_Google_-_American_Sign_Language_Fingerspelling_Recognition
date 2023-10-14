@@ -2,7 +2,7 @@
 
 ## Summary
 
-The code in this project was used to develop the models I submitted to Google's American Sign Laanguage Fingerspelling Recognition competition on Kaggle, which ranked in the top 4.71% of submissions, qualifying for a silver placement.
+The code in this project was used to develop the models I submitted to Google's American Sign Language Fingerspelling Recognition competition on Kaggle, which ranked in the top 4.71% of submissions, qualifying for a silver placement.
 
 ## Project Structure
 
